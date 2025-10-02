@@ -108,7 +108,7 @@ void householder_qr(double A[N][N], double Q[N][N], double R[N][N]) {
         v_norm = vector_norm(v);
         
         // Нормализация v
-        if (v_norm > 0) {
+        if (v_norm > 1e-12) {
             for (int i = k; i < N; i++) {
                 v[i] /= v_norm;
             }

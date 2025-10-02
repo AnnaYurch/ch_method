@@ -24,7 +24,7 @@ int UL_decomposition(int n, double A[n][n], double U[n][n], double L[n][n]) {
         
         // Вычисляем элементы L для столбца i
         for (int j = i + 1; j < n; j++) {
-            if (fabs(U[i][i]) < 0) {
+            if (fabs(U[i][i]) < 1e-12) {
                 printf("Ошибка: нулевой диагональный элемент");
                 return 0;
             }
