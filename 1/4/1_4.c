@@ -7,18 +7,36 @@
 
 // Функция для проверки условия сходимости (Диагональное преобладание)
 int check_convergence(double A[N][N]) {
+    int row_dominance = 1;  
+    int col_dominance = 1;  
+    
     for (int i = 0; i < N; i++) {
-        double sum = 0.0;
+        double row_sum = 0.0;
         for (int j = 0; j < N; j++) {
             if (i != j) {
-                sum += fabs(A[i][j]);
+                row_sum += fabs(A[i][j]);
             }
         }
-        if (fabs(A[i][i]) <= sum) {
-            return 0;
+        if (fabs(A[i][i]) <= row_sum) {
+            row_dominance = 0;
+            break;
         }
     }
-    return 1;
+    
+    for (int j = 0; j < N; j++) {
+        double col_sum = 0.0;
+        for (int i = 0; i < N; i++) {
+            if (i != j) {
+                col_sum += fabs(A[i][j]);
+            }
+        }
+        if (fabs(A[j][j]) <= col_sum) {
+            col_dominance = 0;
+            break;
+        }
+    }
+    
+    return (row_dominance && col_dominance); // ||
 }
 
 int simple_iteration(double A[N][N], double b[N], double x[N]) {
