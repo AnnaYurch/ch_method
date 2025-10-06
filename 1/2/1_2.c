@@ -2,93 +2,108 @@
 #include <stdlib.h>
 #include <math.h>
 
-int UL_decomposition(int n, double A[n][n], double U[n][n], double L[n][n]) {
-    //инициализация U и L
+int UL_decomposition(int n, double A[n][n], double LU[n][n]) {
+    // копируем исходную матрицу в LU
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
-            U[i][j] = 0.0;
-            L[i][j] = 0.0;
+            LU[i][j] = A[i][j];
         }
-        L[i][i] = 1.0; //диагональ L = 1
     }
     
-    //заполнение U и L
     for (int i = 0; i < n; i++) {
-        //вычисляем элементы U для строки i
-        for (int j = i; j < n; j++) {
-            U[i][j] = A[i][j];
-            for (int k = 0; k < i; k++) {
-                U[i][j] -= L[i][k] * U[k][j];
-            }
-        }
-        
-        // Вычисляем элементы L для столбца i
+        // Вычисляем элементы L для столбца i (ниже диагонали)
         for (int j = i + 1; j < n; j++) {
-            if (fabs(U[i][i]) < 1e-12) {
-                printf("Ошибка: нулевой диагональный элемент");
+            if (fabs(LU[i][i]) < 1e-12) {
+                printf("Ошибка: нулевой диагональный элемент U[%d][%d]\n", i, i);
                 return 0;
             }
-            L[j][i] = A[j][i];
-            for (int k = 0; k < i; k++) {
-                L[j][i] -= L[j][k] * U[k][i];
+            LU[j][i] /= LU[i][i]; 
+            
+            for (int k = i + 1; k < n; k++) {
+                LU[j][k] -= LU[j][i] * LU[i][k];
             }
-            L[j][i] /= U[i][i];
         }
     }
     return 1;
 }
 
-//Ly = b
-void solve_L(int n, double L[n][n], double b[n], double y[n]) {
+// Ly = b
+void solve_L(int n, double LU[n][n], double b[n], double y[n]) {
     for (int i = 0; i < n; i++) {
         y[i] = b[i];
         for (int j = 0; j < i; j++) {
-            y[i] -= L[i][j] * y[j];
+            y[i] -= LU[i][j] * y[j];  // LU[i][j] содержит L[i][j]
         }
-        y[i] /= L[i][i];
+        // L[i][i] = 1, поэтому не делим
     }
 }
 
-//Ux = y
-void solve_U(int n, double U[n][n], double y[n], double x[n]) {
+// Ux = y (с верхней треугольной матрицей U)
+void solve_U(int n, double LU[n][n], double y[n], double x[n]) {
     for (int i = n - 1; i >= 0; i--) {
         x[i] = y[i];
         for (int j = i + 1; j < n; j++) {
-            x[i] -= U[i][j] * x[j];
+            x[i] -= LU[i][j] * x[j];  // LU[i][j] содержит U[i][j]
         }
-        x[i] /= U[i][i];
+        x[i] /= LU[i][i];  // LU[i][i] содержит U[i][i]
     }
 }
 
-double determinant(int n, double U[n][n]) {
+void extract_L(int n, double LU[n][n], double L[n][n]) {
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            if (i > j) {
+                L[i][j] = LU[i][j]; 
+            } else if (i == j) {
+                L[i][j] = 1.0;    
+            } else {
+                L[i][j] = 0.0;     
+            }
+        }
+    }
+}
+
+void extract_U(int n, double LU[n][n], double U[n][n]) {
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            if (i <= j) {
+                U[i][j] = LU[i][j];  
+            } else {
+                U[i][j] = 0.0;      
+            }
+        }
+    }
+}
+
+double determinant(int n, double LU[n][n]) {
     double det = 1.0;
     for (int i = 0; i < n; i++) {
-        det *= U[i][i];
+        det *= LU[i][i]; 
     }
     return det;
 }
 
 int inverse_matrix(int n, double A[n][n], double invA[n][n]) {
-    double U[n][n], L[n][n];
+    double LU[n][n];
     double y[n], x[n];
     double e[n];
     
-    if (!UL_decomposition(n, A, U, L)) {
+    if (!UL_decomposition(n, A, LU)) {
         return 0;
     }
     
-    // Для каждого столбца единичной матрицы решаем систему
+    // для каждого столбца единичной матрицы решаем систему
     for (int j = 0; j < n; j++) {
         for (int i = 0; i < n; i++) {
             e[i] = (i == j) ? 1.0 : 0.0;
         }
         
-        //Ly = e
-        solve_L(n, L, e, y);
-        //Ux = y
-        solve_U(n, U, y, x);
+        // Ly = e
+        solve_L(n, LU, e, y);
+        // Ux = y
+        solve_U(n, LU, y, x);
         
-        // Записываем результат в j-ый столбец обратной матрицы
+        // записываем результат в j-ый столбец обратной матрицы
         for (int i = 0; i < n; i++) {
             invA[i][j] = x[i];
         }
@@ -112,6 +127,21 @@ void print_vector(int n, double vector[n]) {
     printf("\n");
 }
 
+void print_LU(int n, double LU[n][n]) {
+    printf("Объединенная матрица LU:\n");
+    printf("(L-элементы ниже диагонали, U-элементы на и выше диагонали)\n");
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            if (i > j) {
+                printf("L%10.6f ", LU[i][j]);
+            } else {
+                printf("U%10.6f ", LU[i][j]);
+            }
+        }
+        printf("\n");
+    }
+}
+
 int main() {
     int n = 4;
     
@@ -124,25 +154,33 @@ int main() {
     
     double b[4] = {15, -12, 10, 18};
     
-    printf("Исходная матрица:");
+    printf("Исходная матрица:\n");
     print_matrix(n, n, A);
     
     printf("\nВектор правой части b:\n");
     print_vector(n, b);
     
-    double U[n][n], L[n][n];
-    if (!UL_decomposition(n, A, U, L)) {
+    // Используем объединенную матрицу LU
+    double LU[n][n];
+    if (!UL_decomposition(n, A, LU)) {
         printf("Ошибка UL-разложения\n");
         return 1;
     }
     
-    printf("\nМатрица L:\n");
+    print_LU(n, LU);
+    
+    // можно извлечь L и U отдельно
+    double L[n][n], U[n][n];
+    extract_L(n, LU, L);
+    extract_U(n, LU, U);
+    
+    printf("\nМатрица L (извлеченная):\n");
     print_matrix(n, n, L);
     
-    printf("\nМатрица U:\n");
+    printf("\nМатрица U (извлеченная):\n");
     print_matrix(n, n, U);
     
-    //A = L * U
+    // проверка: L * U = A
     double check[n][n];
     printf("\nПроверка: L * U =\n");
     for (int i = 0; i < n; i++) {
@@ -155,15 +193,15 @@ int main() {
     }
     print_matrix(n, n, check);
     
-    //решение системы
+    // решение
     double y[n], x[n];
-    solve_L(n, L, b, y);
-    solve_U(n, U, y, x);
+    solve_L(n, LU, b, y);
+    solve_U(n, LU, y, x);
     
     printf("\nРешение системы Ax = b:\n");
     print_vector(n, x);
     
-    double det = determinant(n, U);
+    double det = determinant(n, LU);
     printf("\nОпределитель: %.6f\n", det);
     
     double invA[n][n];
@@ -172,8 +210,8 @@ int main() {
         print_matrix(n, n, invA);
     }
     
-    //моя матрица 5x5
-    printf("\n=== матрица 5x5 ===\n");
+    // Матрица 5x5
+    printf("\n=== Матрица 5x5 ===\n");
     
     int n5 = 5;
     double A5[5][5] = {
@@ -189,16 +227,16 @@ int main() {
     printf("Матрица 5x5:\n");
     print_matrix(n5, n5, A5);
     
-    double U5[n5][n5], L5[n5][n5];
-    if (UL_decomposition(n5, A5, U5, L5)) {
+    double LU5[n5][n5];
+    if (UL_decomposition(n5, A5, LU5)) {
         double y5[n5], x5[n5];
-        solve_L(n5, L5, b5, y5);
-        solve_U(n5, U5, y5, x5);
+        solve_L(n5, LU5, b5, y5);
+        solve_U(n5, LU5, y5, x5);
         
         printf("\nРешение для матрицы 5x5:\n");
         print_vector(n5, x5);
         
-        double det5 = determinant(n5, U5);
+        double det5 = determinant(n5, LU5);
         printf("\nОпределитель: %.6f\n", det5);
 
         double invA5[n5][n5];

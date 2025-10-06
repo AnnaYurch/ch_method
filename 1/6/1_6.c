@@ -68,12 +68,12 @@ double vector_norm(double v[N]) {
     return sqrt(sum);
 }
 
-// Алгоритм Хаусхолдера для QR-разложения
+//алгоритм Хаусхолдера
 void householder_qr(double A[N][N], double Q[N][N], double R[N][N]) {
     double A_temp[N][N];
     copy_matrix(A, A_temp);
     
-    // Инициализация Q как единичной матрицы
+    //инициализация Q как единичной матрицы
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
             Q[i][j] = (i == j) ? 1.0 : 0.0;
@@ -83,9 +83,9 @@ void householder_qr(double A[N][N], double Q[N][N], double R[N][N]) {
     for (int k = 0; k < N - 1; k++) {
         double x[N], v[N], v_norm;
         
-        // Формирование вектора x
+        //формирование вектора x
         for (int i = 0; i < N; i++) {
-            if (i < k) { // Элементы выше текущего столбца не трогаем
+            if (i < k) { //элементы выше текущего столбца не трогаем
                 x[i] = 0;
             } else {
                 x[i] = A_temp[i][k];
@@ -94,7 +94,7 @@ void householder_qr(double A[N][N], double Q[N][N], double R[N][N]) {
         
         double x_norm = vector_norm(x);
         
-        // Формирование вектора v
+        //формирование вектора v
         for (int i = 0; i < N; i++) {
             if (i < k) {
                 v[i] = 0;
@@ -107,15 +107,15 @@ void householder_qr(double A[N][N], double Q[N][N], double R[N][N]) {
         
         v_norm = vector_norm(v);
         
-        // Нормализация v
+        //нормализация v
         if (v_norm > 1e-12) {
             for (int i = k; i < N; i++) {
                 v[i] /= v_norm;
             }
         }
         
-        // Построение матрицы Хаусхолдера H
-        // Начинаем с единичной матрицы
+        //построение H
+        //единичная матрица
         double H[N][N];
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
@@ -134,12 +134,12 @@ void householder_qr(double A[N][N], double Q[N][N], double R[N][N]) {
             }
         }
         
-        // A_temp1 = H * A_temp0
+        // A_temp1 = H * A_temp0 (для получения нулей под диагональю)
         double temp[N][N];
         matrix_mult(H, A_temp, temp);
         copy_matrix(temp, A_temp);
         
-        // Обновление Q: Q = Q * H (H1*H2*H3*....)
+        //обновление Q: Q = Q * H (H1*H2*H3*....)
         matrix_mult(Q, H, temp);
         copy_matrix(temp, Q);
     }
@@ -147,7 +147,7 @@ void householder_qr(double A[N][N], double Q[N][N], double R[N][N]) {
     copy_matrix(A_temp, R);
 }
 
-// QR-алгоритм для нахождения собственных значений
+//нахождения собственных значений
 void qr_algorithm(double A[N][N], Complex eigenvalues[N]) {
     double A_k[N][N], Q[N][N], R[N][N], A_next[N][N];
     double QT[N][N];
@@ -160,11 +160,11 @@ void qr_algorithm(double A[N][N], Complex eigenvalues[N]) {
         // A_{k+1} = R * Q
         matrix_mult(R, Q, A_next);
         
-        // Проверка сходимости (по поддиагональным элементам)
+        //проверка сходимости (по поддиагональным элементам)
         bool converged = true;
         for (int m = 0; m < N - 1; m++) {
             double sum_squares = 0.0;
-            // Вычисляем ∑(a_im)²
+            //вычисляем сумму(a_im)²
             for (int i = m + 1; i < N; i++) {
                 sum_squares += A_next[i][m] * A_next[i][m];
             }
@@ -174,7 +174,7 @@ void qr_algorithm(double A[N][N], Complex eigenvalues[N]) {
                 converged = false;
                 break;
             }
-        } //Критерий сходимости: матрица становится верхней треугольной
+        } //критерий сходимости - матрица становится верхней треугольной
         
         copy_matrix(A_next, A_k);
         
@@ -183,35 +183,39 @@ void qr_algorithm(double A[N][N], Complex eigenvalues[N]) {
             break;
         }
     }
-    
-    // Извлечение собственных значений из квазитреугольной матрицы
+
+    printf("Последняя квазитреугольная матрица A_final:\n");
+    printf("==========================================\n");
+    print_matrix(A_k, "A_final");
+
+    //извлечение собственных значений из квазитреугольной матрицы
     int i = 0;
     while (i < N) {
         if (i == N - 1 || fabs(A_k[i+1][i]) < EPSILON) {
-            // Вещественное собственное значение
+            //вещественное собственное значение
             eigenvalues[i].real = A_k[i][i];
             eigenvalues[i].imag = 0;
             i++;
         } else {
-            // Комплексно-сопряженная пара
+            //комплексно-сопряженная пара
             double a = A_k[i][i];
             double b = A_k[i][i+1];
             double c = A_k[i+1][i];
             double d = A_k[i+1][i+1];
             
-            // Характеристическое уравнение для блока 2x2: λ² - (a+d)λ + (ad - bc) = 0
+            // λ² - (a+d)λ + (ad - bc) = 0
             double trace = a + d;
             double det = a * d - b * c;
             double discriminant = trace * trace - 4 * det;
             
             if (discriminant >= 0) {
-                // Вещественные корни
+                //вещественные корни
                 eigenvalues[i].real = (trace + sqrt(discriminant)) / 2;
                 eigenvalues[i].imag = 0;
                 eigenvalues[i+1].real = (trace - sqrt(discriminant)) / 2;
                 eigenvalues[i+1].imag = 0;
             } else {
-                // Комплексно-сопряженные корни
+                //комплексно-сопряженные корни
                 //λ₁ = α + βi
                 //λ₂ = α - βi
                 eigenvalues[i].real = trace / 2;
@@ -239,19 +243,19 @@ int main() {
     
     print_matrix(A, "Исходная матрица A");
     
-    // Проверка QR-разложения на первой итерации
+    //проверка QR-разложения на первой итерации
     double Q[N][N], R[N][N];
     householder_qr(A, Q, R);
     
     print_matrix(Q, "Матрица Q после QR-разложения");
     print_matrix(R, "Матрица R после QR-разложения");
     
-    // Проверка: A = Q * R
+    //проверка: A = Q * R
     double QR[N][N];
     matrix_mult(Q, R, QR);
     print_matrix(QR, "Проверка: Q * R");
     
-    // Нахождение собственных значений QR-алгоритмом
+    //нахождение собственных значений
     Complex eigenvalues[N];
     qr_algorithm(A, eigenvalues);
     

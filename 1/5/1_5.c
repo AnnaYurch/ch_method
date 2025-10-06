@@ -7,19 +7,31 @@
 #define MAX_ITER 100
 
 bool checkConvergence(double A[N][N]) {
+    bool row_dominance = true;
+    bool col_dominance = true;
+    
     for (int i = 0; i < N; i++) {
         double sum = 0.0;
         for (int j = 0; j < N; j++) {
-            if (i != j) {
-                sum += fabs(A[i][j]);
-            }
+            if (i != j) sum += fabs(A[i][j]);
         }
         if (fabs(A[i][i]) <= sum) {
-            printf("Предупреждение: Условие диагонального преобладания не выполнено для строки %d\n", i + 1);            printf("|%.2f| <= %.2f\n", A[i][i], sum);
-            return false;
+            row_dominance = false;
         }
     }
-    return true;
+    
+    for (int j = 0; j < N; j++) {
+        double sum = 0.0;
+        for (int i = 0; i < N; i++) {
+            if (i != j) sum += fabs(A[i][j]);
+        }
+        if (fabs(A[j][j]) <= sum) {
+            col_dominance = false;
+        }
+    }
+    
+    return (row_dominance || col_dominance); 
+
 }
 
 //метод Зейделя

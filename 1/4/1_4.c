@@ -5,7 +5,7 @@
 #define EPSILON 0.0001
 #define N 4  
 
-// Функция для проверки условия сходимости (Диагональное преобладание)
+//проверка условия сходимости (диагональное преобладание)
 int check_convergence(double A[N][N]) {
     int row_dominance = 1;  
     int col_dominance = 1;  
@@ -36,7 +36,7 @@ int check_convergence(double A[N][N]) {
         }
     }
     
-    return (row_dominance && col_dominance); // ||
+    return (row_dominance || col_dominance); 
 }
 
 int simple_iteration(double A[N][N], double b[N], double x[N]) {
@@ -49,7 +49,7 @@ int simple_iteration(double A[N][N], double b[N], double x[N]) {
         return -1;
     }
     
-    // Преобразование системы к виду x = alpha*x + beta
+    //преобразование к виду x = alpha*x + beta
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
             if (i == j) {
@@ -59,7 +59,7 @@ int simple_iteration(double A[N][N], double b[N], double x[N]) {
             }
         }
         alpha[i] = b[i] / A[i][i];
-        x[i] = alpha[i]; // Начальное приближение
+        x[i] = alpha[i]; //нач приближение
     }
     
     int iter = 0;
@@ -69,12 +69,12 @@ int simple_iteration(double A[N][N], double b[N], double x[N]) {
     printf("----------------------------------------------------------------------------------------\n");
     
     do {
-        // Сохраняем предыдущее приближение
+        //сохраняем предыдущее приближение
         for (int i = 0; i < N; i++) {
             x_old[i] = x[i];
         }
         
-        // Вычисляем новое приближение x⁽ᵏ⁺¹⁾ = αx⁽ᵏ⁾ + β
+        //вычисляем новое приближение x⁽ᵏ⁺¹⁾ = αx⁽ᵏ⁾ + β
         for (int i = 0; i < N; i++) {
             x[i] = alpha[i];
             for (int j = 0; j < N; j++) {

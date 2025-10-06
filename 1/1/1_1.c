@@ -62,7 +62,6 @@ double determinant(double A[N][N]) {
     double B[N][N];
     int i, j, k;
     
-    //копируем матрицу
     for (i = 0; i < N; i++) {
         for (j = 0; j < N; j++) {
             B[i][j] = A[i][j];
