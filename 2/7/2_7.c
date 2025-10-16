@@ -294,11 +294,11 @@ void save_roots(const char* filename, double roots[], int count) {
 void plot_with_gnuplot(double roots[], int root_count) {
     printf("\nПостроение графика...\n");
     
-    // Генерируем данные функции
+    //генерируем данные функции
     generate_function_data("function_data.txt", -2.0, 3.0, 500);
     save_roots("roots.txt", roots, root_count);
 
-    // Создаём скрипт gnuplot
+    //создаём скрипт gnuplot
     FILE *gp = fopen("plot.gp", "w");
     if (!gp) {
         perror("Не удалось создать скрипт gnuplot");
@@ -318,7 +318,7 @@ void plot_with_gnuplot(double roots[], int root_count) {
     
     fclose(gp);
 
-    // Запускаем gnuplot
+    //запускаем gnuplot
     int result = system("gnuplot plot.gp");
     if (result == 0) {
         printf("График сохранен в файл 'equation_plot.png'\n");
