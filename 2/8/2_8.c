@@ -5,15 +5,79 @@
 #define EPS 0.0001
 #define MAX_ITER 1000
 
-//обратная матрица в методе ньютона от J!
-//
+int UL_decomposition(int n, double A[n][n], double LU[n][n]) {
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            LU[i][j] = A[i][j];
+        }
+    }
+    
+    for (int i = 0; i < n; i++) {
+        for (int j = i + 1; j < n; j++) {
+            if (fabs(LU[i][i]) < 1e-12) {
+                printf("Ошибка: нулевой диагональный элемент U[%d][%d]\n", i, i);
+                return 0;
+            }
+            LU[j][i] /= LU[i][i]; 
+            
+            for (int k = i + 1; k < n; k++) {
+                LU[j][k] -= LU[j][i] * LU[i][k];
+            }
+        }
+    }
+    return 1;
+}
+
+// Ly = b
+void solve_L(int n, double LU[n][n], double b[n], double y[n]) {
+    for (int i = 0; i < n; i++) {
+        y[i] = b[i];
+        for (int j = 0; j < i; j++) {
+            y[i] -= LU[i][j] * y[j];
+        }
+    }
+}
+
+// Ux = y
+void solve_U(int n, double LU[n][n], double y[n], double x[n]) {
+    for (int i = n - 1; i >= 0; i--) {
+        x[i] = y[i];
+        for (int j = i + 1; j < n; j++) {
+            x[i] -= LU[i][j] * x[j];
+        }
+        x[i] /= LU[i][i];
+    }
+}
+
+int inverse_matrix(int n, double A[n][n], double invA[n][n]) {
+    double LU[n][n];
+    double y[n], x[n];
+    double e[n];
+    
+    if (!UL_decomposition(n, A, LU)) {
+        return 0;
+    }
+    
+    for (int j = 0; j < n; j++) {
+        for (int i = 0; i < n; i++) {
+            e[i] = (i == j) ? 1.0 : 0.0;
+        }
+        
+        solve_L(n, LU, e, y);
+        solve_U(n, LU, y, x);
+        
+        for (int i = 0; i < n; i++) {
+            invA[i][j] = x[i];
+        }
+    }
+    return 1;
+}
 
 void f(double x1, double x2, double *f1, double *f2) {
     *f1 = x1*x1 + x2*x2 - 5*sin(x1) - 9;
     *f2 = 2*x1*x1 + 2*x1*x2 - 3*x2*x2 - 4*x1 - x2*cos(x1) + 3;
 }
 
-//матрица Якоби
 void jacobian(double x1, double x2, double J[2][2]) {
     J[0][0] = 2*x1 - 5*cos(x1);
     J[0][1] = 2*x2;
@@ -21,26 +85,15 @@ void jacobian(double x1, double x2, double J[2][2]) {
     J[1][1] = 2*x1 - 6*x2 - cos(x1);
 }
 
-//решение системы 2x2
-int solve_2x2(double A[2][2], double b[2], double x[2]) {
-    double det = A[0][0]*A[1][1] - A[0][1]*A[1][0];
-    if (fabs(det) < 1e-12) return 0;
-    
-    x[0] = (b[0]*A[1][1] - b[1]*A[0][1]) / det;
-    x[1] = (A[0][0]*b[1] - A[1][0]*b[0]) / det;
-    return 1;
-}
-
-//метод Ньютона
 int newton_method(double *x1, double *x2) {
     double x1_old, x2_old;
     double f1, f2;
-    double J[2][2];
-    double b[2], dx[2];
+    double J[2][2], J_inv[2][2];
+    double dx[2];
     int iter = 0;
     double dx_norm = 1.0;
     
-    printf("Метод Ньютона:\n");
+    printf("Метод Ньютона (с LU-разложением):\n");
     printf("k\tx1\t\tx2\t\tf1\t\tf2\n");
     
     do {
@@ -49,16 +102,16 @@ int newton_method(double *x1, double *x2) {
         
         f(*x1, *x2, &f1, &f2);
         
-        if (fabs(f1) < EPS && fabs(f2) < EPS) break; //нашли фактическое решение
+        if (fabs(f1) < EPS && fabs(f2) < EPS) break;
         
         jacobian(*x1, *x2, J);
-        b[0] = -f1;
-        b[1] = -f2;
-        //J·dX = -F  dX-ищем
         
-        if (!solve_2x2(J, b, dx)) {
+        if (!inverse_matrix(2, J, J_inv)) {
             dx[0] = -0.01 * f1;
             dx[1] = -0.01 * f2;
+        } else {
+            dx[0] = -(J_inv[0][0] * f1 + J_inv[0][1] * f2);
+            dx[1] = -(J_inv[1][0] * f1 + J_inv[1][1] * f2);
         }
         
         *x1 += dx[0];
@@ -225,14 +278,57 @@ int seidel_method_adaptive(double *x1, double *x2) {
     return iter;
 }
 
-int main() {
-    double solutions[][2] = {
-        {2.5, 2.5},    //корень 1
-        {-1.0, -2.0},  //корень 2  
-        {-1.5, 1.5}    //корень 3
+//функция для поиска точек пересечения графиков эквивалентных функций
+void find_fixed_points(double lambda1, double lambda2) {
+    printf("Поиск точек пересечения графиков эквивалентных функций:\n");
+
+    double test_points[][2] = {
+        {2.5, 2.5}, {-1.0, -2.0}, {-1.5, 1.5},
+        {0.0, 0.0}, {1.0, 1.0}, {-1.0, 1.0},
+        {3.0, 3.0}, {-2.0, -3.0}, {-2.0, 2.0}
     };
+    
+    for (int i = 0; i < 9; i++) {
+        double x1 = test_points[i][0];
+        double x2 = test_points[i][1];
+        double phi1, phi2;
         
-    for (int i = 0; i < 3; i++) {
+        phi_simple_theory(x1, x2, &phi1, &phi2);
+        
+        double f1, f2;
+        f(x1, x2, &f1, &f2);
+        
+        printf("Точка (%5.1f, %5.1f): ", x1, x2);
+        printf("f1=%.3f, f2=%.3f", f1, f2);
+        
+        //проверка на близость к неподвижной точке
+        if (fabs(phi1 - x1) < 0.1 && fabs(phi2 - x2) < 0.1) {
+            printf(" - БЛИЗКО К ПЕРЕСЕЧЕНИЮ\n");
+        } else {
+            printf(" - далеко\n");
+        }
+    }
+}
+
+int main() {
+
+    find_fixed_points(0.001, 0.001);
+
+    /*
+    double solutions[][2] = {
+        {2.0, 2.5},    //корень 1 -
+        {-1.0, -2.0},  //корень 2 -
+        {-1.5, 1.5}    //корень 3 +
+    };
+    */
+    
+    double solutions[][2] = {
+        {2.0, 2.5},    //корень 1 - 
+        {-1.0, -2.0},  //корень 2 -
+        {-1.5, 1.5}    //корень 3 +
+    };
+    
+    for (int i = 0; i < 3; i++) { //3
         printf("\n=== Корень %d ===\n", i+1);
         
         double x1_n = solutions[i][0], x2_n = solutions[i][1];
