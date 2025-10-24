@@ -129,74 +129,141 @@ int newton_method(double *x1, double *x2) {
     return iter;
 }
 
-int check_simple_iteration_convergence(double x1, double x2) {
+// НОВАЯ функция проверки сходимости с подбором λ
+int check_simple_iteration_convergence(double x1, double x2, double lambda1, double lambda2) {
     double J[2][2];
     jacobian(x1, x2, J);
     
-    // Φi = xi + λi·fi
-    
-    double lambda1 = 0.001, lambda2 = 0.001;  // |λ| < 0.5
-    
-    //матрица производных итерирующих функций
+    // Матрица производных итерирующих функций: Φi = xi + λi·fi
     double Phi_J[2][2];
     Phi_J[0][0] = 1 + lambda1 * J[0][0];  // dΦ1/dx1
     Phi_J[0][1] = lambda1 * J[0][1];      // dΦ1/dx2
     Phi_J[1][0] = lambda2 * J[1][0];      // dΦ2/dx1  
     Phi_J[1][1] = 1 + lambda2 * J[1][1];  // dΦ2/dx2
     
-    //норма матрицы
+    // Норма матрицы (кубическая)
     double norm1 = fabs(Phi_J[0][0]) + fabs(Phi_J[0][1]);
     double norm2 = fabs(Phi_J[1][0]) + fabs(Phi_J[1][1]);
     double norm = (norm1 > norm2) ? norm1 : norm2;
         
     if (norm < 1.0) {
-        printf("Условие сходимости ВЫПОЛНЕНО (||J_Φ|| = %.6f < 1)\n", norm);
+        printf("Условие сходимости ВЫПОЛНЕНО (||J_Φ|| = %.6f < 1) при λ=(%.4f,%.4f)\n", norm, lambda1, lambda2);
         return 1;
     } else {
-        printf("Условие сходимости НЕ ВЫПОЛНЕНО (||J_Φ|| = %.6f >= 1)\n", norm);
+        printf("Условие сходимости НЕ ВЫПОЛНЕНО (||J_Φ|| = %.6f >= 1) при λ=(%.4f,%.4f)\n", norm, lambda1, lambda2);
         return 0;
     }
 }
 
-void phi_simple_theory(double x1, double x2, double *x1_new, double *x2_new) {
+// НОВАЯ функция автоматического подбора λ
+void find_optimal_lambda(double x1, double x2, double *lambda1, double *lambda2) {
+    double best_lambda1 = 0.001, best_lambda2 = 0.001;
+    double best_norm = 1000.0;
+    
+    // Пробуем разные значения λ
+    double lambda_values[] = {0.0001, 0.0005, 0.001, 0.005, 0.01, 0.02, 0.05, 0.1, -0.001, -0.01};
+    int num_lambdas = sizeof(lambda_values) / sizeof(lambda_values[0]);
+    
+    for (int i = 0; i < num_lambdas; i++) {
+        for (int j = 0; j < num_lambdas; j++) {
+            double lambda1_test = lambda_values[i];
+            double lambda2_test = lambda_values[j];
+            
+            double J[2][2];
+            jacobian(x1, x2, J);
+            
+            double Phi_J[2][2];
+            Phi_J[0][0] = 1 + lambda1_test * J[0][0];
+            Phi_J[0][1] = lambda1_test * J[0][1];
+            Phi_J[1][0] = lambda2_test * J[1][0];
+            Phi_J[1][1] = 1 + lambda2_test * J[1][1];
+            
+            double norm1 = fabs(Phi_J[0][0]) + fabs(Phi_J[0][1]);
+            double norm2 = fabs(Phi_J[1][0]) + fabs(Phi_J[1][1]);
+            double norm = (norm1 > norm2) ? norm1 : norm2;
+            
+            if (norm < best_norm && norm < 0.9) {
+                best_norm = norm;
+                best_lambda1 = lambda1_test;
+                best_lambda2 = lambda2_test;
+            }
+        }
+    }
+    
+    *lambda1 = best_lambda1;
+    *lambda2 = best_lambda2;
+    printf("Оптимальные параметры: λ1=%.6f, λ2=%.6f (||J_Φ||=%.6f)\n", best_lambda1, best_lambda2, best_norm);
+}
+
+// НОВАЯ итерационная функция с разными методами
+void phi_simple_theory(double x1, double x2, double *x1_new, double *x2_new, int method_type) {
     double f1, f2;
     f(x1, x2, &f1, &f2);
     
-    // Φi(x) = xi + λi·fi(x), |λi| < 0.5
-    double lambda1 = 0.001;  
-    double lambda2 = 0.001;  
+    double lambda1, lambda2;
+    
+    if (method_type == 1) {
+        // Для корней в правой полуплоскости (положительные x1)
+        lambda1 = -0.01;
+        lambda2 = -0.01;
+    }
+    else if (method_type == 2) {
+        // Для корней в левой полуплоскости (отрицательные x1)
+        lambda1 = 0.01;  
+        lambda2 = 0.01;
+    }
+    else if (method_type == 3) {
+        // Смешанный вариант
+        lambda1 = -0.005;
+        lambda2 = 0.005;
+    }
+    else {
+        // Автоматический подбор
+        find_optimal_lambda(x1, x2, &lambda1, &lambda2);
+    }
     
     *x1_new = x1 + lambda1 * f1;
     *x2_new = x2 + lambda2 * f2;
 }
 
-//метод простой итерации с проверкой сходимости
+// НОВАЯ улучшенная функция метода простых итераций
 int simple_iteration_adaptive(double *x1, double *x2) {
     double x1_old, x2_old;
-    double x1_new, x2_new;
     int iter = 0;
     double dx_norm = 1.0;
     
     printf("Метод простой итерации:\n");
+    printf("Начальное приближение: x1 = %f, x2 = %f\n", *x1, *x2);
     
-    //условия сходимости
-    int convergence_ok = check_simple_iteration_convergence(*x1, *x2);
-    
-    if (!convergence_ok) {
-        printf("ВНИМАНИЕ: Условие сходимости не выполняется! Метод может расходиться.\n");
+    // Определяем тип метода по начальному приближению
+    int method_type;
+    if (*x1 > 0) {
+        method_type = 1;  // Для положительных x1
+        printf("Используется метод для положительных x1\n");
+    } else {
+        method_type = 2;  // Для отрицательных x1  
+        printf("Используется метод для отрицательных x1\n");
     }
     
-    //printf("k\tx1\t\tx2\t\tf1\t\tf2\t\t||dx||\n");
+    // Проверяем сходимость
+    double lambda1, lambda2;
+    if (method_type == 1) {
+        lambda1 = -0.01; lambda2 = -0.01;
+    } else {
+        lambda1 = 0.01; lambda2 = 0.01;
+    }
+    check_simple_iteration_convergence(*x1, *x2, lambda1, lambda2);
     
-    do {
+    for (iter = 0; iter < MAX_ITER; iter++) {
         x1_old = *x1;
         x2_old = *x2;
         
         // Вычисляем x^(k+1) = Φ(x^(k))
-        phi_simple_theory(*x1, *x2, &x1_new, &x2_new);
+        double x1_new, x2_new;
+        phi_simple_theory(*x1, *x2, &x1_new, &x2_new, method_type);
         
         if (!isfinite(x1_new) || !isfinite(x2_new)) {
-            printf("Метод расходится!\n");
+            printf("Расходимость на итерации %d!\n", iter);
             return -1;
         }
         
@@ -209,19 +276,28 @@ int simple_iteration_adaptive(double *x1, double *x2) {
         dx_norm = sqrt((*x1 - x1_old)*(*x1 - x1_old) + 
                       (*x2 - x2_old)*(*x2 - x2_old));
         
-        // Вывод информации на каждой итерации
-        //printf("%d\t%.6f\t%.6f\t%.2e\t%.2e\t%.2e\n", 
-               //iter, *x1, *x2, f1, f2, dx_norm);
+        double residual = sqrt(f1*f1 + f2*f2);
         
-        iter++;
-        
-        if (iter >= MAX_ITER) {
-            //printf("Достигнут предел итераций (%d)\n", MAX_ITER);
-            break;
+        if (iter % 100 == 0 && iter > 0) {
+            printf("Итерация %d: x1 = %.8f, x2 = %.8f, ошибка = %e, невязка = %e\n", 
+                   iter, *x1, *x2, dx_norm, residual);
         }
         
-    } while (dx_norm > EPS); 
+        if (dx_norm < EPS && residual < EPS) {
+            printf("Сходимость достигнута на итерации %d\n", iter);
+            printf("Корень: x1 = %.6f, x2 = %.6f\n", *x1, *x2);
+            printf("Невязка: f1 = %e, f2 = %e\n", f1, f2);
+            return iter;
+        }
+        
+        // Адаптация метода если медленно сходится
+        if (iter > 50 && dx_norm > 0.1) {
+            printf("Медленная сходимость, пробуем другой метод...\n");
+            method_type = 3;  // Переключаемся на смешанный метод
+        }
+    }
     
+    printf("Достигнут предел итераций (%d)\n", MAX_ITER);
     return iter;
 }
 
@@ -279,6 +355,7 @@ int seidel_method_adaptive(double *x1, double *x2) {
 }
 
 //функция для поиска точек пересечения графиков эквивалентных функций
+//функция для поиска точек пересечения графиков эквивалентных функций
 void find_fixed_points(double lambda1, double lambda2) {
     printf("Поиск точек пересечения графиков эквивалентных функций:\n");
 
@@ -293,7 +370,15 @@ void find_fixed_points(double lambda1, double lambda2) {
         double x2 = test_points[i][1];
         double phi1, phi2;
         
-        phi_simple_theory(x1, x2, &phi1, &phi2);
+        // Определяем method_type по x1 (как в основной функции)
+        int method_type;
+        if (x1 > 0) {
+            method_type = 1;  // Для положительных x1
+        } else {
+            method_type = 2;  // Для отрицательных x1
+        }
+        
+        phi_simple_theory(x1, x2, &phi1, &phi2, method_type);
         
         double f1, f2;
         f(x1, x2, &f1, &f2);
@@ -328,7 +413,6 @@ int main() {
     x1=2.423889, x2=2.532399 
     x1=2.987711, x2=-0.916494 
     (0.350, −0.830)
-    */
     
     double solutions[][2] = {
         {2.0, 2.5},    //корень 1 - 
@@ -336,7 +420,17 @@ int main() {
         {-1.5, 1.5},    //корень 3 +
         {1.3, -1.8}
     };
+    */
     
+    
+    
+    double solutions[][2] = {
+        {-1.5, 1.5},    // Для корня 1 (-1.318459, 1.555637)
+        {-1.0, -2.0},  //корень 2 -
+        {-1.5, 1.5},    //корень 3 +
+        {3.0, -1.0}     // Для корня 4 (2.987711, -0.916494)
+    };
+
     for (int i = 0; i < 4; i++) { //3
         printf("\n=== Корень %d ===\n", i+1);
         

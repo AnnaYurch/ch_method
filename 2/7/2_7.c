@@ -47,13 +47,16 @@ int newton(double a, double b, double eps, double *root, int *iterations) {
     double fb = f(b), f2b = d2f(b);
     
     if (fa * f2a > 0) {
-        x = a;  // x⁽⁰⁾ = a
+        x = a;  // оптимальный выбор - условие сходимости выполняется
     } else if (fb * f2b > 0) {
-        x = b;  // x⁽⁰⁾ = b  
+        x = b;  // оптимальный выбор - условие сходимости выполняется
+    } else if (fabs(fa - fb) < 1e-10 * (fabs(fa) + fabs(fb))) {
+        printf("Ошибка!");  // если |f(a)| ≈ |f(b)|, берем середину
+        return 0;
     } else {
-        //если условие не выполняется, берем середину
-        x = (a + b) / 2.0;
+        x = (fabs(fa) > fabs(fb)) ? a : b;  // иначе берем точку с большим |f(x)|
     }
+    
     
     //условие
     int condition_holds = 1;
@@ -99,12 +102,16 @@ int secant(double a, double b, double eps, double *root, int *iterations) {
     double fb = f(b), f2b = d2f(b);
     
     if (fa * f2a > 0) {
-        x0 = a;  // x0 = a
+        x0 = a;
     } else if (fb * f2b > 0) {
-        x0 = b;  // x0 = b
+        x0 = b;
+    } else if (fabs(fa - fb) < 1e-10) { 
+        printf("Ошибка!");  
+        return 0;
     } else {
-        x0 = (a + b) / 2.0;
+        x0 = (fabs(fa) > fabs(fb)) ? a : b;
     }
+    
     
     // x1 = x0 - f(x0)/f'(x0)
     double dfx0 = df(x0);
@@ -164,11 +171,16 @@ int chord(double a, double b, double eps, double *root, int *iterations) {
     double fb = f(b), f2b = d2f(b);
     
     if (fa * f2a > 0) {
-        z = a; 
+        z = a;  // f и f'' одного знака в точке a
     } else if (fb * f2b > 0) {
-        z = b;  
+        z = b;  // f и f'' одного знака в точке b
+    } else if (fabs(fa) > fabs(fb)) {
+        z = a;  // |f(a)| > |f(b)|, берем a
+    } else if (fabs(fb) > fabs(fa)) {
+        z = b;  // |f(b)| > |f(a)|, берем b
     } else {
-        z = (fabs(fa) > fabs(fb)) ? a : b;
+        printf("Ошибка!");  
+        return 0;
     }
     
     double fz = f(z);  
