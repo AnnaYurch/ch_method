@@ -5,22 +5,22 @@
 #define MAX_POINTS 9
 
 typedef struct {
-    int n;          //количество точек
+    int n;          // количество точек
     double x[MAX_POINTS];
     double y[MAX_POINTS];
-    double diff[MAX_POINTS][MAX_POINTS]; //таблица разделенных разностей
+    double diff[MAX_POINTS][MAX_POINTS]; // таблица разделенных разностей
 } DataTable;
 
-//вычисления разделенных разностей
+// вычисления разделенных разностей
 void calculate_divided_differences(DataTable *data) {
     int i, j;
     
-    //инициализация первого столбца значениями функции
+    // инициализация первого столбца значениями функции
     for (i = 0; i < data->n; i++) {
         data->diff[i][0] = data->y[i];
     }
     
-    //вычисление разделенных разностей
+    // вычисление разделенных разностей
     for (j = 1; j < data->n; j++) {
         for (i = 0; i < data->n - j; i++) {
             data->diff[i][j] = (data->diff[i+1][j-1] - data->diff[i][j-1]) / 
@@ -29,77 +29,77 @@ void calculate_divided_differences(DataTable *data) {
     }
 }
 
-// Многочлен Ньютона с явным указанием начального узла и степени
-double newton_custom(DataTable *data, double x, int start_index, int degree) {
-    if (start_index < 0 || start_index + degree >= data->n) {
-        printf("Ошибка: неверные индексы узлов!\n");
+double newton_backward(DataTable *data, double x, int degree) {
+    if (degree >= data->n) {
+        printf("Ошибка: степень слишком высокая!\n");
         return 0.0;
     }
     
-    double result = data->diff[start_index][0];
+    double result = data->diff[data->n-1][0]; 
     double product = 1.0;
     int i;
     
     for (i = 1; i <= degree; i++) {
-        product *= (x - data->x[start_index + i - 1]);
-        result += product * data->diff[start_index][i];
+        product *= (x - data->x[data->n - i]);  
+        result += product * data->diff[data->n - i - 1][i]; 
     }
-    
     return result;
 }
 
-// Оценка погрешности для кастомных узлов
-double estimate_custom_error(DataTable *data, double x, int start_index, int degree) {
-    if (start_index < 0 || start_index + degree >= data->n) {
+//оценка погрешности
+double estimate_backward_error(DataTable *data, double x, int degree) {
+    if (degree >= data->n) {
         return 0.0;
     }
     
     double product = 1.0;
     int i;
     
+    // (x-x8)(x-x7)(x-x6)
     for (i = 0; i <= degree; i++) {
-        product *= (x - data->x[start_index + i]);
+        product *= (x - data->x[data->n - 1 - i]);
     }
     
-    // Используем следующую разделенную разность для оценки погрешности
     double next_diff;
-    if (start_index + degree + 1 < data->n) {
-        next_diff = data->diff[start_index][degree + 1];
-    } else {
+    if (data->n - degree - 2 >= 0) {
         next_diff = data->diff[data->n - degree - 2][degree + 1];
+    } else {
+        next_diff = data->diff[0][degree + 1];
     }
     
     return fabs(product * next_diff);
 }
 
-// Вывод информации об используемых узлах
-void print_used_nodes(DataTable *data, int start_index, int degree) {
+void print_backward_nodes(DataTable *data, int degree) {
     printf("Используемые узлы: ");
     for (int i = 0; i <= degree; i++) {
-        printf("x%d=%.4f(y=%.4f) ", start_index + i, 
-               data->x[start_index + i], data->y[start_index + i]);
+        int node_index = data->n - 1 - i;
+        printf("x%d=%.4f(y=%.4f) ", node_index, 
+               data->x[node_index], data->y[node_index]);
     }
     printf("\n");
 }
 
-// ПРОВЕРКА в узловой точке (НОВАЯ ФУНКЦИЯ)
-void test_at_node(DataTable *data, int node_index, int start_index, int degree) {
+// ПРОВЕРКА в узловой точке
+void test_backward_at_node(DataTable *data, int node_index, int degree) {
     double x_node = data->x[node_index];
     double y_actual = data->y[node_index];
-    double y_calculated = newton_custom(data, x_node, start_index, degree);
+    double y_calculated = newton_backward(data, x_node, degree);
     double error = fabs(y_actual - y_calculated);
     
+    printf("\n");
+
     printf("Проверка в узле x%d=%.4f:\n", node_index, x_node);
     printf(" Фактическое:  y = %10.6f\n", y_actual);
     printf(" Вычисленное: P%d = %10.6f\n", degree, y_calculated);
     printf(" Погрешность:     %10.2e\n", error);
-    printf("\n");
-
+    
     if (error < 1e-10) {
         printf("Многочлен точно проходит через узел\n");
     } else {
         printf("Замечание: погрешность значительная\n");
     }
+    printf("\n");
 }
 
 int main() {
@@ -116,35 +116,35 @@ int main() {
     }
     
     printf("=== ВАРИАНТ 44 ===\n");
+    printf("=== ВТОРАЯ ФОРМУЛА НЬЮТОНА ===\n");
     
-    //вычисление разделенных разностей
+    // вычисление разделенных разностей
     calculate_divided_differences(&data);
     
     printf("Точка интерполяции: x* = %.3f\n\n", x_star);
     
-    printf("=== УЗЛЫ: 5,6,7 ===\n");
+    // МНОГОЧЛЕН 2-Й СТЕПЕНИ 
+    printf("=== МНОГОЧЛЕН 2-Й СТЕПЕНИ ===\n");
+    double p2 = newton_backward(&data, x_star, 2);
+    double error_p2 = estimate_backward_error(&data, x_star, 2);
     
-    int manual_start_1 = 5; 
-    double manual_p2_1 = newton_custom(&data, x_star, manual_start_1, 2);
-    double error_p2_1 = estimate_custom_error(&data, x_star, manual_start_1, 2);
+    print_backward_nodes(&data, 2);  
+    printf(" P2(%.3f) = %12.8f\n", x_star, p2);
+    printf(" Оценка погрешности: %12.8f\n", error_p2);
     
-    print_used_nodes(&data, manual_start_1, 2);
-    printf(" P2(%.3f) = %12.8f\n", x_star, manual_p2_1);
-    printf(" Оценка погрешности: %10.2e\n", error_p2_1);
-    
-    printf("=== УЗЛЫ: 4,5,6,7 ===\n");
-    
-    int manual_start_2 = 4;
-    double manual_p3_1 = newton_custom(&data, x_star, manual_start_2, 3);
-    double error_p3_1 = estimate_custom_error(&data, x_star, manual_start_2, 3);
-    
-    print_used_nodes(&data, manual_start_2, 3);
-    printf(" P3(%.3f) = %12.8f\n", x_star, manual_p3_1);
-    printf(" Оценка погрешности: %10.2e\n", error_p3_1);
-    
-    printf("\n");
 
-    test_at_node(&data, 5, manual_start_2, 3);
+    test_backward_at_node(&data, 7, 2);
+    
+    // МНОГОЧЛЕН 3-Й СТЕПЕНИ
+    printf("=== МНОГОЧЛЕН 3-Й СТЕПЕНИ ===\n");
+    double p3 = newton_backward(&data, x_star, 3);
+    double error_p3 = estimate_backward_error(&data, x_star, 3);
+    
+    print_backward_nodes(&data, 3);
+    printf(" P3(%.3f) = %12.8f\n", x_star, p3);
+    printf(" Оценка погрешности: %12.8f\n", error_p3);
+    
+    test_backward_at_node(&data, 8, 3);  
 
     return 0;
 }
