@@ -102,6 +102,96 @@ void test_backward_at_node(DataTable *data, int node_index, int degree) {
     printf("\n");
 }
 
+void plot_newton_graphs(DataTable *data, double x_star) {
+    FILE *data_file = fopen("newton_data.txt", "w");
+    FILE *gnuplot_script = fopen("plot_newton.gnu", "w");
+    
+    if (!data_file || !gnuplot_script) {
+        printf("Ошибка создания файлов для графиков\n");
+        return;
+    }
+    
+    // Записываем исходные точки
+    fprintf(data_file, "# ИСХОДНЫЕ ТОЧКИ\n");
+    for (int i = 0; i < data->n; i++) {
+        fprintf(data_file, "%.6f %.6f\n", data->x[i], data->y[i]);
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем точки для P2 (многочлен 2-й степени)
+    fprintf(data_file, "# МНОГОЧЛЕН P2(x) 2-й СТЕПЕНИ\n");
+    for (double xi = -1.5; xi <= 2.5; xi += 0.01) {
+        double yi = newton_backward(data, xi, 2);
+        fprintf(data_file, "%.6f %.6f\n", xi, yi);
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем точки для P3 (многочлен 3-й степени)
+    fprintf(data_file, "# МНОГОЧЛЕН P3(x) 3-й СТЕПЕНИ\n");
+    for (double xi = -1.5; xi <= 2.5; xi += 0.01) {
+        double yi = newton_backward(data, xi, 3);
+        fprintf(data_file, "%.6f %.6f\n", xi, yi);
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем узлы, используемые для P2
+    fprintf(data_file, "# УЗЛЫ P2 (2-я степень)\n");
+    for (int i = 0; i <= 2; i++) {
+        int node_index = data->n - 1 - i;
+        fprintf(data_file, "%.6f %.6f\n", data->x[node_index], data->y[node_index]);
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем узлы, используемые для P3
+    fprintf(data_file, "# УЗЛЫ P3 (3-я степень)\n");
+    for (int i = 0; i <= 3; i++) {
+        int node_index = data->n - 1 - i;
+        fprintf(data_file, "%.6f %.6f\n", data->x[node_index], data->y[node_index]);
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем точку интерполяции
+    fprintf(data_file, "# ТОЧКА ИНТЕРПОЛЯЦИИ\n");
+    double p2_star = newton_backward(data, x_star, 2);
+    double p3_star = newton_backward(data, x_star, 3);
+    fprintf(data_file, "%.6f %.6f\n", x_star, p2_star);
+    fprintf(data_file, "%.6f %.6f\n", x_star, p3_star);
+    
+    fclose(data_file);
+    
+    // Создаем скрипт для gnuplot
+    fprintf(gnuplot_script, "set terminal pngcairo size 1200,800 enhanced font 'Arial,12'\n");
+    fprintf(gnuplot_script, "set output 'newton_graph.png'\n");
+    fprintf(gnuplot_script, "set title 'Интерполяция Ньютона (вторая формула) - Вариант 44' font 'Arial,14'\n");
+    fprintf(gnuplot_script, "set xlabel 'x' font 'Arial,12'\n");
+    fprintf(gnuplot_script, "set ylabel 'y' font 'Arial,12'\n");
+    fprintf(gnuplot_script, "set grid\n");
+    fprintf(gnuplot_script, "set key top left box\n");
+    fprintf(gnuplot_script, "set xrange [-1.5:2.5]\n");
+    fprintf(gnuplot_script, "set yrange [-3:2]\n");
+    
+    // Настройка стилей линий и точек
+    fprintf(gnuplot_script, "set style line 1 lc rgb 'black' pt 7 ps 1.5\n");
+    fprintf(gnuplot_script, "set style line 2 lc rgb 'red' lw 2\n");
+    fprintf(gnuplot_script, "set style line 3 lc rgb 'blue' lw 2\n");
+    fprintf(gnuplot_script, "set style line 4 lc rgb 'dark-red' pt 2 ps 2\n");
+    fprintf(gnuplot_script, "set style line 5 lc rgb 'dark-blue' pt 4 ps 2\n");
+    fprintf(gnuplot_script, "set style line 6 lc rgb 'green' pt 9 ps 2\n");
+    
+    fprintf(gnuplot_script, "plot 'newton_data.txt' index 0 with points ls 1 title 'Все исходные точки', \\\n");
+    fprintf(gnuplot_script, "     'newton_data.txt' index 1 with lines ls 2 title 'P2(x) (2-я степень)', \\\n");
+    fprintf(gnuplot_script, "     'newton_data.txt' index 2 with lines ls 3 title 'P3(x) (3-я степень)', \\\n");
+    fprintf(gnuplot_script, "     'newton_data.txt' index 3 with points ls 4 title 'Узлы P2', \\\n");
+    fprintf(gnuplot_script, "     'newton_data.txt' index 4 with points ls 5 title 'Узлы P3', \\\n");
+    fprintf(gnuplot_script, "     'newton_data.txt' index 5 with points ls 6 title 'x*=%.3f'\n", x_star);
+    
+    fclose(gnuplot_script);
+    
+    // Запускаем gnuplot
+    system("gnuplot plot_newton.gnu");
+    printf("График сохранен в файл: newton_graph.png\n");
+}
+
 int main() {
     DataTable data;
     double x_star = 1.708;
@@ -145,6 +235,9 @@ int main() {
     printf(" Оценка погрешности: %12.8f\n", error_p3);
     
     test_backward_at_node(&data, 8, 3);  
+
+    printf("\n=== ПОСТРОЕНИЕ ГРАФИКОВ ===\n");
+    plot_newton_graphs(&data, x_star);
 
     return 0;
 }

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include <stdlib.h>
 
 double lagrange(double x, double x_nodes[], double y_nodes[], int n, int indices[]) {
     double result = 0.0;
@@ -29,6 +30,75 @@ void check_at_node(double x_nodes[], double y_nodes[], int node_index, int indic
     printf("  Истинное значение: %.4f\n", actual);
     printf("  Интерполированное: %.4f\n", interpolated);
     printf("  Ошибка: %.6f\n\n", error);
+}
+
+void plot_lagrange(double x_nodes[], double y_nodes[], int indices_L2[], int indices_L3[], int n_total) {
+    FILE *data_file = fopen("lagrange_data.txt", "w");
+    FILE *gnuplot_script = fopen("plot_lagrange.gnu", "w");
+    
+    if (!data_file || !gnuplot_script) {
+        printf("Ошибка создания файлов для графиков\n");
+        return;
+    }
+    
+    // Записываем исходные точки
+    fprintf(data_file, "# ИСХОДНЫЕ ТОЧКИ\n");
+    for (int i = 0; i < n_total; i++) {
+        fprintf(data_file, "%.6f %.6f\n", x_nodes[i], y_nodes[i]);
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем точки для L2 (многочлен 2-й степени)
+    fprintf(data_file, "# МНОГОЧЛЕН L2(x) 2-й СТЕПЕНИ\n");
+    for (double xi = -1.5; xi <= 2.5; xi += 0.01) {
+        double yi = lagrange(xi, x_nodes, y_nodes, 2, indices_L2);
+        fprintf(data_file, "%.6f %.6f\n", xi, yi);
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем точки для L3 (многочлен 3-й степени)
+    fprintf(data_file, "# МНОГОЧЛЕН L3(x) 3-й СТЕПЕНИ\n");
+    for (double xi = -1.5; xi <= 2.5; xi += 0.01) {
+        double yi = lagrange(xi, x_nodes, y_nodes, 3, indices_L3);
+        fprintf(data_file, "%.6f %.6f\n", xi, yi);
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем узлы, используемые для L2
+    fprintf(data_file, "# УЗЛЫ L2\n");
+    for (int i = 0; i < 3; i++) {
+        fprintf(data_file, "%.6f %.6f\n", x_nodes[indices_L2[i]], y_nodes[indices_L2[i]]);
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем узлы, используемые для L3
+    fprintf(data_file, "# УЗЛЫ L3\n");
+    for (int i = 0; i < 4; i++) {
+        fprintf(data_file, "%.6f %.6f\n", x_nodes[indices_L3[i]], y_nodes[indices_L3[i]]);
+    }
+    
+    fclose(data_file);
+    
+    // Создаем скрипт для gnuplot
+    fprintf(gnuplot_script, "set terminal pngcairo size 1200,800 enhanced font 'Arial,12'\n");
+    fprintf(gnuplot_script, "set output 'lagrange_graph.png'\n");
+    fprintf(gnuplot_script, "set title 'Интерполяция Лагранжа - Вариант 44' font 'Arial,14'\n");
+    fprintf(gnuplot_script, "set xlabel 'x' font 'Arial,12'\n");
+    fprintf(gnuplot_script, "set ylabel 'y' font 'Arial,12'\n");
+    fprintf(gnuplot_script, "set grid\n");
+    fprintf(gnuplot_script, "set key top left box\n");
+    fprintf(gnuplot_script, "set xrange [-1.5:2.5]\n");
+    fprintf(gnuplot_script, "set yrange [-3:2]\n");
+    fprintf(gnuplot_script, "plot 'lagrange_data.txt' index 0 with points pt 7 ps 1.5 lc rgb 'black' title 'Все исходные точки', \\\n");
+    fprintf(gnuplot_script, "     'lagrange_data.txt' index 1 with lines lw 2 lc rgb 'red' title 'L2(x) (2-я степень)', \\\n");
+    fprintf(gnuplot_script, "     'lagrange_data.txt' index 2 with lines lw 2 lc rgb 'blue' title 'L3(x) (3-я степень)', \\\n");
+    fprintf(gnuplot_script, "     'lagrange_data.txt' index 3 with points pt 2 ps 2 lc rgb 'dark-red' title 'Узлы L2', \\\n");
+    fprintf(gnuplot_script, "     'lagrange_data.txt' index 4 with points pt 4 ps 2 lc rgb 'dark-blue' title 'Узлы L3'\n");
+    fclose(gnuplot_script);
+    
+    // Запускаем gnuplot
+    system("gnuplot plot_lagrange.gnu");
+    printf("График сохранен в файл: lagrange_graph.png\n");
 }
 
 int main() {    
@@ -76,5 +146,8 @@ int main() {
     printf("   L3(%.3f) = %.6f\n", x_star, L3);
     printf("   Разница: %.6f\n", fabs(L2 - L3));
     
+    printf("\n4. Построение графиков...\n");
+    plot_lagrange(x, y, indices_L2, indices_L3, 9);
+
     return 0;
 }

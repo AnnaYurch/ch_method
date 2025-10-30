@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 void natural_cubic_spline(int n, double x[], double y[], double a[], double b[], double c[], double d[]) {
     double *h = (double*)malloc(n * sizeof(double)); // длина i-го отрезка между точками
@@ -61,6 +62,92 @@ double spline_value(int n, double x[], double a[], double b[], double c[], doubl
     return 0.0; 
 }
 
+double min_element(double arr[], int size) {
+    double min_val = arr[0];
+    for (int i = 1; i < size; i++) {
+        if (arr[i] < min_val) min_val = arr[i];
+    }
+    return min_val;
+}
+
+double max_element(double arr[], int size) {
+    double max_val = arr[0];
+    for (int i = 1; i < size; i++) {
+        if (arr[i] > max_val) max_val = arr[i];
+    }
+    return max_val;
+}
+
+// Исправленная функция для построения графика
+void plot_spline(int n, double x[], double y[], double a[], double b[], double c[], double d[], double x_star) {
+    FILE *data_file = fopen("spline_data.txt", "w");
+    FILE *gnuplot_script = fopen("plot_spline.gnu", "w");
+    
+    if (!data_file || !gnuplot_script) {
+        printf("Ошибка создания файлов для графиков\n");
+        return;
+    }
+    
+    // Записываем исходные точки
+    fprintf(data_file, "# ИСХОДНЫЕ ТОЧКИ\n");
+    for (int i = 0; i <= n; i++) {
+        fprintf(data_file, "%.6f %.6f\n", x[i], y[i]);
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем точки сплайна БЕЗ разрывов между отрезками
+    fprintf(data_file, "# КУБИЧЕСКИЙ СПЛАЙН\n");
+    for (int i = 0; i < n; i++) {
+        // Вычисляем точки на каждом отрезке
+        int points_per_segment = 20;
+        for (int j = 0; j <= points_per_segment; j++) {
+            double xi = x[i] + j * (x[i+1] - x[i]) / points_per_segment;
+            double yi = spline_value(n, x, a, b, c, d, xi);
+            fprintf(data_file, "%.6f %.6f\n", xi, yi);
+        }
+    }
+    fprintf(data_file, "\n\n");
+    
+    // Записываем точку интерполяции
+    fprintf(data_file, "# ТОЧКА ИНТЕРПОЛЯЦИИ\n");
+    double y_star = spline_value(n, x, a, b, c, d, x_star);
+    fprintf(data_file, "%.6f %.6f\n", x_star, y_star);
+    
+    fclose(data_file);
+    
+    // Вычисляем min и max для установки диапазона Y
+    double y_min = min_element(y, n+1);
+    double y_max = max_element(y, n+1);
+    
+    // Создаем скрипт для gnuplot
+    fprintf(gnuplot_script, "set terminal pngcairo size 1200,800 enhanced font 'Arial,12'\n");
+    fprintf(gnuplot_script, "set output 'spline_graph.png'\n");
+    fprintf(gnuplot_script, "set title 'Естественный кубический сплайн дефекта 1' font 'Arial,14'\n");
+    fprintf(gnuplot_script, "set xlabel 'x' font 'Arial,12'\n");
+    fprintf(gnuplot_script, "set ylabel 'y' font 'Arial,12'\n");
+    fprintf(gnuplot_script, "set grid\n");
+    fprintf(gnuplot_script, "set key top left box\n");
+    fprintf(gnuplot_script, "set xrange [%.1f:%.1f]\n", x[0]-0.1, x[n]+0.1);
+    fprintf(gnuplot_script, "set yrange [%.1f:%.1f]\n", y_min - 0.5, y_max + 0.5);
+    
+    // Настройка стилей
+    fprintf(gnuplot_script, "set style line 1 lc rgb 'black' pt 7 ps 1.5\n");
+    fprintf(gnuplot_script, "set style line 2 lc rgb 'red' lw 2\n");
+    fprintf(gnuplot_script, "set style line 3 lc rgb 'blue' pt 9 ps 2\n");
+    
+    fprintf(gnuplot_script, "plot 'spline_data.txt' index 0 with points ls 1 title 'Исходные точки', \\\n");
+    fprintf(gnuplot_script, "     'spline_data.txt' index 1 with lines ls 2 title 'Кубический сплайн', \\\n");
+    fprintf(gnuplot_script, "     'spline_data.txt' index 2 with points ls 3 title 'x*=%.3f (S=%.3f)'\n", 
+            x_star, y_star);
+    
+    fclose(gnuplot_script);
+    
+    // Запускаем gnuplot
+    system("gnuplot plot_spline.gnu");
+    printf("График сохранен в файл: spline_graph.png\n");
+}
+
+
 int main() {
     int n = 10; //количество отрезков
     double x[] = {0.06, 0.356, 0.763, 1.096, 1.54, 2.021, 2.354, 2.761, 3.205, 3.464, 3.76};
@@ -113,10 +200,13 @@ int main() {
     }
     printf("%d\t%.3f\t%.3f\t\t\t%.6f\n", n, x[n], y[n], c[n]);
     
+    printf("\n=== ПОСТРОЕНИЕ ГРАФИКА ===\n");
+    plot_spline(n, x, y, a, b, c, d, x_star);
+
     free(a);
     free(b);
     free(c);
     free(d);
-    
+
     return 0;
 }
