@@ -264,54 +264,52 @@ int chord(double a, double b, double eps, double *root, int *iterations) {
 }
 
 //метод простой итерации
-int simple_iteration(double x0, double eps, double *root, int *iterations) {
+int simple_iteration(double a, double b, double eps, double *root, int *iterations) {
     *iterations = 0;
-
-    if (f(a) * f(b) >= 0) {
-        printf("  ОШИБКА: на интервале [%.2f, %.2f] нет корня\n", a, b);
+    
+    double x = (a + b) / 2.0;
+    
+    double lambda;
+    double df_x0 = df(x);
+    
+    if (fabs(df_x0) > 1e-10) {
+        lambda = -0.5 / df_x0;  
+    } else {
+        lambda = -0.05;  
+    }
+    
+    if (fabs(lambda) >= 0.5) {
+        lambda = (lambda > 0) ? 0.49 : -0.49;
+    }
+    
+    //условие
+    int condition_holds = 1;
+    for (double test_x = a; test_x <= b; test_x += (b-a)/10.0) {
+        double phi_prime = 1 + lambda * df(test_x);
+        if (fabs(phi_prime) >= 1.0) {
+            condition_holds = 0;
+            break;
+        }
+    }
+    
+    if (!condition_holds) {
+        printf("  ОШИБКА: условие |φ'(x)| < 1 не выполняется на интервале!\n");
         return -1;
     }
     
-    double lambda;
-    
-    //оцениваем производную в начальной точке
-    double df_x0 = df(x0);
-    
-    // λ = -1/f'(x*) ≈ -1/f'(x0)
-    //но чтобы гарантировать |1 + λ·f'(x)| < 1, берем меньшее значение
-    if (fabs(df_x0) > 1e-10) {
-        lambda = -0.5 / df_x0; 
-    } else {
-        lambda = -0.05;  // Если производная близка к 0
-    }
-    
-    //гарантируем что |λ| не слишком большое
-    if (fabs(lambda) > 1.0) {
-        lambda = (lambda > 0) ? 0.1 : -0.1;
-    }
-    
-    double phi(double x) {
-        return x + lambda * f(x);
-    }
-    
-    double x_prev = x0;
-    double x_curr = phi(x_prev);
+    double x_prev = x;
+    double x_curr = x_prev + lambda * f(x_prev);
     (*iterations)++;
-        
+    
     while (*iterations < MAX_ITER) {
-        double phi_prime = 1 + lambda * df(x_curr);
-        if (fabs(phi_prime) >= 1) { //условие
-            printf("  ОШИБКА: |φ'(x)|=%.3f ≥ 1, метод может расходиться!\n", fabs(phi_prime));        }
-        
         if (fabs(x_curr - x_prev) < eps) {
             *root = x_curr;
             return 0;
         }
         
         x_prev = x_curr;
-        x_curr = phi(x_prev);
+        x_curr = x_prev + lambda * f(x_prev);
         (*iterations)++;
-        
     }
     
     return -1;
@@ -442,7 +440,7 @@ void solve_for_interval(double a, double b, double x0, const char* interval_name
     }
     
     // Метод простой итерации
-    if (simple_iteration(x0, EPS, &root, &iterations) == 0) {
+    if (simple_iteration(a, b, EPS, &root, &iterations) == 0) {
         printf("Метод простой итер.: x = %.6f, f(x) = %.2e, итераций: %d\n", root, f(root), iterations);
     }
 }
