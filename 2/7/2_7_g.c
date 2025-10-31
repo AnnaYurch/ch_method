@@ -41,53 +41,38 @@ int bisection(double a, double b, double eps, double *root, int *iterations) {
 int newton(double a, double b, double eps, double *root, int *iterations) {
     *iterations = 0;
     
+    //ВЫБОР НАЧАЛЬНОЙ ТОЧКИ
     double x;
     double fa = f(a), f2a = d2f(a);
     double fb = f(b), f2b = d2f(b);
-
-    int optimal_a = (fa * f2a > 0) && (fabs(f2a) > 1e-10);
-    int optimal_b = (fb * f2b > 0) && (fabs(f2b) > 1e-10);
-
-    if (optimal_a && optimal_b) {
-        //обе точки оптимальны - выбираем с большим |f(x)|
-        x = (fabs(fa) > fabs(fb)) ? a : b;
-    }
-    else if (optimal_a) {
-        x = a;
-    }
-    else if (optimal_b) {
-        x = b;
-    }
-    else {
-        printf("  ОШИБКА: ни одна точка не удовлетворяет достаточному условию сходимости!\n");
-        return -1;
+    
+    if (fa * f2a > 0) {
+        x = a;  // оптимальный выбор - условие сходимости выполняется
+    } else if (fb * f2b > 0) {
+        x = b;  // оптимальный выбор - условие сходимости выполняется
+    } else if (fabs(fa - fb) < 1e-10 * (fabs(fa) + fabs(fb))) {
+        printf("Ошибка!");  // если |f(a)| ≈ |f(b)|, берем середину
+        return 0;
+    } else {
+        x = (fabs(fa) > fabs(fb)) ? a : b;  // иначе берем точку с большим |f(x)|
     }
     
-    int condition_holds = 1;
-    
-    double dfx = df(x);
-    if (fabs(dfx) < 1e-15) {
-        printf("  ВНИМАНИЕ: f'(x₀) слишком мала, сходимость не гарантирована\n");
-        condition_holds = 0;
-    }
-    
-    double fx = f(x);
-    double d2fx = d2f(x);
     
     //условие
-    // |f(x₀)·f''(x₀)| < [f'(x₀)]²
-    double left_side = fabs(fx * d2fx);
-    double right_side = dfx * dfx;
+    int condition_holds = 1;
+    for (double test_x = a; test_x <= b; test_x += (b-a)/5.0) {
+        double left = fabs(f(test_x) * d2f(test_x));
+        double right = df(test_x) * df(test_x);
+        if (left >= right) condition_holds = 0;
+    }
     
-    if (left_side >= right_side) {
-        printf("  ВНИМАНИЕ: достаточное условие сходимости не выполняется\n");
-        printf("  |f(x₀)·f''(x₀)| = %.6f, [f'(x₀)]² = %.6f\n", left_side, right_side);
-        condition_holds = 0;
+    if (!condition_holds) {
+        printf("  ВНИМАНИЕ: достаточное условие сходимости не выполняется!\n");
     }
     
     while (*iterations < MAX_ITER) {
-        fx = f(x);
-        dfx = df(x);
+        double fx = f(x);
+        double dfx = df(x);
         
         if (fabs(dfx) < 1e-15) {
             printf("  ОШИБКА: f'(x) слишком близка к 0\n");
@@ -111,27 +96,22 @@ int newton(double a, double b, double eps, double *root, int *iterations) {
 int secant(double a, double b, double eps, double *root, int *iterations) {
     *iterations = 0;
     
+    //ВЫБОР НАЧАЛЬНЫХ ТОЧЕК
     double x0, x1;
     double fa = f(a), f2a = d2f(a);
     double fb = f(b), f2b = d2f(b);
-
-    int optimal_a = (fa * f2a > 0) && (fabs(f2a) > 1e-10);
-    int optimal_b = (fb * f2b > 0) && (fabs(f2b) > 1e-10);
-
-    if (optimal_a && optimal_b) {
-        //обе точки оптимальны - выбираем с большим |f(x)|
+    
+    if (fa * f2a > 0) {
+        x0 = a;
+    } else if (fb * f2b > 0) {
+        x0 = b;
+    } else if (fabs(fa - fb) < 1e-10) { 
+        printf("Ошибка!");  
+        return 0;
+    } else {
         x0 = (fabs(fa) > fabs(fb)) ? a : b;
     }
-    else if (optimal_a) {
-        x0 = a;
-    }
-    else if (optimal_b) {
-        x0 = b;
-    }
-    else {
-        printf("  ОШИБКА: ни одна точка не удовлетворяет достаточному условию сходимости!\n");
-        return -1;
-    }
+    
     
     // x1 = x0 - f(x0)/f'(x0)
     double dfx0 = df(x0);
@@ -143,22 +123,14 @@ int secant(double a, double b, double eps, double *root, int *iterations) {
     
     //условие
     int condition_holds = 1;
+    for (double test_x = a; test_x <= b; test_x += (b-a)/5.0) {
+        double left = fabs(f(test_x) * d2f(test_x));
+        double right = df(test_x) * df(test_x);
+        if (left >= right) condition_holds = 0;
+    }
     
-    for (double test_x = a; test_x <= b; test_x += (b-a)/10.0) {
-        double fx = f(test_x);
-        double dfx = df(test_x);
-        double d2fx = d2f(test_x);
-        
-        // |f(x)·f''(x)| < [f'(x)]²
-        double left_side = fabs(fx * d2fx);
-        double right_side = dfx * dfx;
-        
-        if (left_side >= right_side) {
-            printf("  ВНИМАНИЕ: условие сходимости нарушено в точке x=%.3f\n", test_x);
-            printf("  |f(x)·f''(x)| = %.6f, [f'(x)]² = %.6f\n", left_side, right_side);
-            condition_holds = 0;
-            break;
-        }
+    if (!condition_holds) {
+        printf("  ВНИМАНИЕ: достаточное условие сходимости не выполняется!\n");
     }
     
     double x_prev = x0;
@@ -191,60 +163,29 @@ int secant(double a, double b, double eps, double *root, int *iterations) {
 //метод хорд
 int chord(double a, double b, double eps, double *root, int *iterations) {
     *iterations = 0;
-    if (f(a) * f(b) >= 0) {
-        printf("  ОШИБКА: на интервале [%.2f, %.2f] нет корня\n", a, b);
-        return -1;
-    }
-
-    double z, x;
+    if (f(a) * f(b) >= 0) return -1;
+    
+    //ВЫБОР ФИКСИРОВАННОЙ ТОЧКИ z
+    double z;
     double fa = f(a), f2a = d2f(a);
     double fb = f(b), f2b = d2f(b);
-
-    int optimal_a = (fa * f2a > 0) && (fabs(f2a) > 1e-10);
-    int optimal_b = (fb * f2b > 0) && (fabs(f2b) > 1e-10);
-
-    if (optimal_a && optimal_b) {
-        // Обе точки оптимальны
-        z = (fabs(fa) > fabs(fb)) ? a : b;  // z - с большим |f(x)|
-        x = (z == a) ? b : a;               // x - другая точка
-    }
-    else if (optimal_a) {
-        z = a;  // a оптимальна для z
-        x = b;  // x - другая точка
-    }
-    else if (optimal_b) {
-        z = b;  // b оптимальна для z  
-        x = a;  // x - другая точка
-    }
-    else {
-        printf("  ОШИБКА: ни одна точка не удовлетворяет достаточному условию сходимости!\n");
-        return -1;
+    
+    if (fa * f2a > 0) {
+        z = a;  // f и f'' одного знака в точке a
+    } else if (fb * f2b > 0) {
+        z = b;  // f и f'' одного знака в точке b
+    } else if (fabs(fa) > fabs(fb)) {
+        z = a;  // |f(a)| > |f(b)|, берем a
+    } else if (fabs(fb) > fabs(fa)) {
+        z = b;  // |f(b)| > |f(a)|, берем b
+    } else {
+        printf("Ошибка!");  
+        return 0;
     }
     
     double fz = f(z);  
-
-    int condition_holds = 1;
     
-    //условие
-    for (double test_x = a; test_x <= b; test_x += (b-a)/10.0) {
-        double fx = f(test_x);
-        double dfx = df(test_x);
-        double d2fx = d2f(test_x);
-        
-        // |f(x)·f''(x)| < [f'(x)]²
-        double left_side = fabs(fx * d2fx);
-        double right_side = dfx * dfx;
-        
-        if (left_side >= right_side) {
-            printf("  ВНИМАНИЕ: условие сходимости нарушено в точке x=%.3f\n", test_x);
-            condition_holds = 0;
-            break;
-        }
-    }
-    
-    if (!condition_holds) {
-        printf("  ВНИМАНИЕ: достаточное условие сходимости не выполняется на интервале\n");
-    }
+    double x = (z == a) ? b : a;
     
     while (*iterations < MAX_ITER) {
         double fx = f(x);  
@@ -266,11 +207,6 @@ int chord(double a, double b, double eps, double *root, int *iterations) {
 //метод простой итерации
 int simple_iteration(double x0, double eps, double *root, int *iterations) {
     *iterations = 0;
-
-    if (f(a) * f(b) >= 0) {
-        printf("  ОШИБКА: на интервале [%.2f, %.2f] нет корня\n", a, b);
-        return -1;
-    }
     
     double lambda;
     
@@ -490,6 +426,9 @@ int main() {
             roots[root_count++] = root;
         }
     }
+
+    //строим график
+    plot_with_gnuplot(roots, root_count);
 
     return 0;
 }
