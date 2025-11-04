@@ -60,7 +60,7 @@ double calculate_error(double x[], double y[], double coefs[], int degree) {
     return error;
 }
 
-void plot_graphs(double x[], double y[], double coefs1[], double coefs2[], double coefs3[], int n) {
+void plot_graphs(double x[], double y[], double coefs1[], double coefs2[], double coefs3[], double coefs4[], double coefs5[], double coefs6[], int n) {
     FILE *data_file = fopen("data.txt", "w");
     FILE *gnuplot_script = fopen("plot.gnu", "w");
     
@@ -91,24 +91,45 @@ void plot_graphs(double x[], double y[], double coefs1[], double coefs2[], doubl
     for (double xi = -1.0; xi <= 6.5; xi += 0.1) {
         fprintf(data_file, "%.6f %.6f\n", xi, polynomial_value(xi, coefs3, 3));
     }
+    fprintf(data_file, "\n\n");
+    
+    fprintf(data_file, "# МНОГОЧЛЕН 4-й СТЕПЕНИ\n");
+    for (double xi = -1.0; xi <= 6.5; xi += 0.1) {
+        fprintf(data_file, "%.6f %.6f\n", xi, polynomial_value(xi, coefs4, 4));
+    }
+    fprintf(data_file, "\n\n");
+    
+    fprintf(data_file, "# МНОГОЧЛЕН 5-й СТЕПЕНИ\n");
+    for (double xi = -1.0; xi <= 6.5; xi += 0.1) {
+        fprintf(data_file, "%.6f %.6f\n", xi, polynomial_value(xi, coefs5, 5));
+    }
+    fprintf(data_file, "\n\n");
+    
+    fprintf(data_file, "# МНОГОЧЛЕН 6-й СТЕПЕНИ\n");
+    for (double xi = -1.0; xi <= 6.5; xi += 0.1) {
+        fprintf(data_file, "%.6f %.6f\n", xi, polynomial_value(xi, coefs6, 6));
+    }
     
     fclose(data_file);
     
     fprintf(gnuplot_script, "set terminal pngcairo size 1200,800 enhanced font 'Arial,12'\n");
     fprintf(gnuplot_script, "set output 'mnk_graph.png'\n");
-    fprintf(gnuplot_script, "set title 'Метод Наименьших Квадратов - Вариант 44' font 'Arial,14'\n");
+    fprintf(gnuplot_script, "set title 'Метод Наименьших Квадратов - Аппроксимация многочленами 1-6 степени' font 'Arial,14'\n");
     fprintf(gnuplot_script, "set xlabel 'x' font 'Arial,12'\n");
     fprintf(gnuplot_script, "set ylabel 'y' font 'Arial,12'\n");
     fprintf(gnuplot_script, "set grid\n");
     fprintf(gnuplot_script, "set key top left box\n");
     fprintf(gnuplot_script, "plot 'data.txt' index 0 with points pt 7 ps 1.5 lc rgb 'black' title 'Исходные данные', \\\n");
-    fprintf(gnuplot_script, "     'data.txt' index 1 with lines lw 2 lc rgb 'red' title 'F1(x)', \\\n");
-    fprintf(gnuplot_script, "     'data.txt' index 2 with lines lw 2 lc rgb 'blue' title 'F2(x)', \\\n");
-    fprintf(gnuplot_script, "     'data.txt' index 3 with lines lw 2 lc rgb 'green' title 'F3(x)'\n");
+    fprintf(gnuplot_script, "     'data.txt' index 1 with lines lw 2 lc rgb 'red' title 'F1(x) (1 степень)', \\\n");
+    fprintf(gnuplot_script, "     'data.txt' index 2 with lines lw 2 lc rgb 'blue' title 'F2(x) (2 степень)', \\\n");
+    fprintf(gnuplot_script, "     'data.txt' index 3 with lines lw 2 lc rgb 'green' title 'F3(x) (3 степень)', \\\n");
+    fprintf(gnuplot_script, "     'data.txt' index 4 with lines lw 2 lc rgb 'purple' title 'F4(x) (4 степень)', \\\n");
+    fprintf(gnuplot_script, "     'data.txt' index 5 with lines lw 2 lc rgb 'orange' title 'F5(x) (5 степень)', \\\n");
+    fprintf(gnuplot_script, "     'data.txt' index 6 with lines lw 2 lc rgb 'brown' title 'F6(x) (6 степень)'\n");
     fclose(gnuplot_script);
     
     system("gnuplot plot.gnu");
-    printf("Исправленный график сохранен в файл: mnk_graph.png\n");
+    printf("График сохранен в файл: mnk_graph.png\n");
 }
 
 int main() {
@@ -120,19 +141,19 @@ int main() {
     printf("x* = %.3f\n\n", x_star);
     
     //вычисление сумм
-    double sum_x[7] = {0};
-    double sum_xy[4] = {0};
+    double sum_x[13] = {0};  
+    double sum_xy[7] = {0};  
     double sum_y = 0;
-    
+
     for (int i = 0; i < N; i++) {
         double x_power = 1.0;
-        for (int j = 0; j < 7; j++) {
+        for (int j = 0; j < 13; j++) {  
             sum_x[j] += x_power;
             x_power *= x[i];
         }
         
         double xy_power = 1.0;
-        for (int j = 0; j < 4; j++) {
+        for (int j = 0; j < 7; j++) {   
             sum_xy[j] += y[i] * xy_power;
             xy_power *= x[i];
         }
@@ -142,8 +163,8 @@ int main() {
     
     printf("1. МНОГОЧЛЕН 1-й СТЕПЕНИ: F1(x) = a0 + a1*x\n");
     double A1[2][3] = {
-        {sum_x[0], sum_x[1], sum_y},      // 10·a0 + 26.35·a1 = -0.3565
-        {sum_x[1], sum_x[2], sum_xy[1]}   // 26.35·a0 + 120.92·a1 = 20.7905
+        {sum_x[0], sum_x[1], sum_y},      
+        {sum_x[1], sum_x[2], sum_xy[1]}   
     };
     
     double coefs1[2];
@@ -196,6 +217,79 @@ int main() {
     
     double F3_xstar = polynomial_value(x_star, coefs3, 3);
     printf("F3(%.3f) = %.6f\n\n", x_star, F3_xstar);
+
+    printf("4. МНОГОЧЛЕН 4-й СТЕПЕНИ: F4(x) = a0 + a1*x + a2*x^2 + a3*x^3 + a4*x^4\n");
+    double A4[5][6] = {
+        {sum_x[0], sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_y},
+        {sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_xy[1]},
+        {sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_xy[2]},
+        {sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_xy[3]},
+        {sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_xy[4]}
+    };
+
+    double coefs4[5];
+    gauss_solve(5, A4, coefs4);
+
+    printf("Коэффициенты: a0 = %.6f, a1 = %.6f, a2 = %.6f, a3 = %.6f, a4 = %.6f\n", 
+        coefs4[0], coefs4[1], coefs4[2], coefs4[3], coefs4[4]);
+    printf("F4(x) = %.6f + %.6f*x + %.6f*x^2 + %.6f*x^3 + %.6f*x^4\n", 
+        coefs4[0], coefs4[1], coefs4[2], coefs4[3], coefs4[4]);
+
+    double error4 = calculate_error(x, y, coefs4, 4);
+    printf("Сумма квадратов ошибок: Φ4 = %.6f\n", error4);
+
+    double F4_xstar = polynomial_value(x_star, coefs4, 4);
+    printf("F4(%.3f) = %.6f\n\n", x_star, F4_xstar);
+
+    printf("5. МНОГОЧЛЕН 5-й СТЕПЕНИ: F5(x) = a0 + a1*x + a2*x^2 + a3*x^3 + a4*x^4 + a5*x^5\n");
+    double A5[6][7] = {
+        {sum_x[0], sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_y},
+        {sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_xy[1]},
+        {sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_xy[2]},
+        {sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_xy[3]},
+        {sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_xy[4]},
+        {sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_x[10], sum_xy[5]}
+    };
+
+    double coefs5[6];
+    gauss_solve(6, A5, coefs5);
+
+    printf("Коэффициенты: a0 = %.6f, a1 = %.6f, a2 = %.6f, a3 = %.6f, a4 = %.6f, a5 = %.6f\n", 
+        coefs5[0], coefs5[1], coefs5[2], coefs5[3], coefs5[4], coefs5[5]);
+    printf("F5(x) = %.6f + %.6f*x + %.6f*x^2 + %.6f*x^3 + %.6f*x^4 + %.6f*x^5\n", 
+        coefs5[0], coefs5[1], coefs5[2], coefs5[3], coefs5[4], coefs5[5]);
+
+    double error5 = calculate_error(x, y, coefs5, 5);
+    printf("Сумма квадратов ошибок: Φ5 = %.6f\n", error5);
+
+    double F5_xstar = polynomial_value(x_star, coefs5, 5);
+    printf("F5(%.3f) = %.6f\n\n", x_star, F5_xstar);
+
+    printf("6. МНОГОЧЛЕН 6-й СТЕПЕНИ: F6(x) = a0 + a1*x + a2*x^2 + a3*x^3 + a4*x^4 + a5*x^5 + a6*x^6\n");
+    double A6[7][8] = {
+        {sum_x[0], sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_y},
+        {sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_xy[1]},
+        {sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_xy[2]},
+        {sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_xy[3]},
+        {sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_x[10], sum_xy[4]},
+        {sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_x[10], sum_x[11], sum_xy[5]},
+        {sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_x[10], sum_x[11], sum_x[12], sum_xy[6]}
+    };
+
+    double coefs6[7];
+    gauss_solve(7, A6, coefs6);
+
+    printf("Коэффициенты:\n");
+    printf("a0 = %.6f, a1 = %.6f, a2 = %.6f\n", coefs6[0], coefs6[1], coefs6[2]);
+    printf("a3 = %.6f, a4 = %.6f, a5 = %.6f, a6 = %.6f\n", coefs6[3], coefs6[4], coefs6[5], coefs6[6]);
+    printf("F6(x) = %.6f + %.6f*x + %.6f*x^2 + %.6f*x^3 + %.6f*x^4 + %.6f*x^5 + %.6f*x^6\n", 
+        coefs6[0], coefs6[1], coefs6[2], coefs6[3], coefs6[4], coefs6[5], coefs6[6]);
+
+    double error6 = calculate_error(x, y, coefs6, 6);
+    printf("Сумма квадратов ошибок: Φ6 = %.6f\n", error6);
+
+    double F6_xstar = polynomial_value(x_star, coefs6, 6);
+    printf("F6(%.3f) = %.6f\n\n", x_star, F6_xstar);
     
     printf("СВОДНАЯ ТАБЛИЦА РЕЗУЛЬТАТОВ:\n");
     printf("Степень | Сумма квадратов ошибок | F(x*)\n");
@@ -203,9 +297,12 @@ int main() {
     printf("   1    |       %12.6f     | %8.4f\n", error1, F1_xstar);
     printf("   2    |       %12.6f     | %8.4f\n", error2, F2_xstar);
     printf("   3    |       %12.6f     | %8.4f\n", error3, F3_xstar);
-    
+    printf("   4    |       %12.6f     | %8.4f\n", error4, F4_xstar);
+    printf("   5    |       %12.6f     | %8.4f\n", error5, F5_xstar);
+    printf("   6    |       %12.6f     | %8.4f\n", error6, F6_xstar);
+
     printf("\nСтроим графики...\n");
-    plot_graphs(x, y, coefs1, coefs2, coefs3, N);
+    plot_graphs(x, y, coefs1, coefs2, coefs3, coefs4, coefs5, coefs6, N);
     
     return 0;
 }
