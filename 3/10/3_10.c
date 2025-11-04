@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 #define MAX_POINTS 9
 
@@ -11,185 +12,134 @@ typedef struct {
     double diff[MAX_POINTS][MAX_POINTS]; // таблица разделенных разностей
 } DataTable;
 
-// вычисления разделенных разностей
-void calculate_divided_differences(DataTable *data) {
+// вычисление разделенных разностей для произвольных узлов
+void calculate_divided_differences_for_nodes(DataTable *data, int indices[], int node_count) {
     int i, j;
     
+    double temp_x[MAX_POINTS], temp_y[MAX_POINTS];
+    
+    for (i = 0; i < node_count; i++) {
+        temp_x[i] = data->x[indices[i]];
+        temp_y[i] = data->y[indices[i]];
+    }
+    
     // инициализация первого столбца значениями функции
-    for (i = 0; i < data->n; i++) {
-        data->diff[i][0] = data->y[i];
+    for (i = 0; i < node_count; i++) {
+        data->diff[i][0] = temp_y[i];
     }
     
     // вычисление разделенных разностей
-    for (j = 1; j < data->n; j++) {
-        for (i = 0; i < data->n - j; i++) {
+    for (j = 1; j < node_count; j++) {
+        for (i = 0; i < node_count - j; i++) {
             data->diff[i][j] = (data->diff[i+1][j-1] - data->diff[i][j-1]) / 
-                              (data->x[i+j] - data->x[i]);
+                              (temp_x[i+j] - temp_x[i]);
         }
     }
 }
 
-double newton_backward(DataTable *data, double x, int degree) {
+double newton_forward(DataTable *data, double x, int indices[], int degree) {
     if (degree >= data->n) {
         printf("Ошибка: степень слишком высокая!\n");
         return 0.0;
     }
     
-    double result = data->diff[data->n-1][0]; 
+    double result = data->diff[0][0]; // f(x0)
     double product = 1.0;
     int i;
     
     for (i = 1; i <= degree; i++) {
-        product *= (x - data->x[data->n - i]);  
-        result += product * data->diff[data->n - i - 1][i]; 
+        product *= (x - data->x[indices[i-1]]); // (x-x0)(x-x1)...(x-x_{i-1})
+        result += product * data->diff[0][i]; // f(x0,x1,...,xi)
     }
+    
     return result;
 }
 
-//оценка погрешности
-double estimate_backward_error(DataTable *data, double x, int degree) {
+double newton_backward(DataTable *data, double x, int indices[], int degree) {
     if (degree >= data->n) {
+        printf("Ошибка: степень слишком высокая!\n");
         return 0.0;
     }
     
+    double result = data->diff[degree][0]; // f(x_n)
     double product = 1.0;
     int i;
     
-    // (x-x8)(x-x7)(x-x6)
-    for (i = 0; i <= degree; i++) {
-        product *= (x - data->x[data->n - 1 - i]);
+    for (i = 1; i <= degree; i++) {
+        product *= (x - data->x[indices[degree - i + 1]]); // (x-x_n)(x-x_{n-1})...
+        result += product * data->diff[degree - i][i]; 
     }
     
-    double next_diff;
-    if (data->n - degree - 2 >= 0) {
-        next_diff = data->diff[data->n - degree - 2][degree + 1];
-    } else {
-        next_diff = data->diff[0][degree + 1];
+    return result;
+}
+
+// оценка погрешности интерполяции
+double estimate_error(DataTable *data, double x, int indices[], int degree) {
+    if (degree + 1 >= data->n) {
+        return 0.0;  
     }
+    
+    // (x-x₀)(x-x₁)...(x-x_n)
+    double product = 1.0;
+    for (int i = 0; i <= degree; i++) {
+        product *= (x - data->x[indices[i]]);
+    }
+    
+    //если есть узел после последнего используемого - берем его
+    //иначе берем узел перед первым используемым
+    int next_index;
+    if (indices[degree] + 1 < data->n) {
+        next_index = indices[degree] + 1;  
+    } else {
+        next_index = indices[0] - 1;       
+    }
+    
+    if (next_index < 0 || next_index >= data->n) {
+        return 0.0; 
+    }
+    
+    //создаем расширенный набор узлов
+    int extended_indices[MAX_POINTS];
+    for (int i = 0; i <= degree; i++) {
+        extended_indices[i] = indices[i];
+    }
+    extended_indices[degree + 1] = next_index;
+    
+    //вычисляем разделенную разность (n+1)-го порядка
+    calculate_divided_differences_for_nodes(data, extended_indices, degree + 2);
+    
+    double next_diff = data->diff[0][degree + 1];
     
     return fabs(product * next_diff);
 }
 
-void print_backward_nodes(DataTable *data, int degree) {
-    printf("Используемые узлы: ");
+void print_selected_nodes(DataTable *data, int indices[], int degree) {
+    printf(" Узлы: ");
     for (int i = 0; i <= degree; i++) {
-        int node_index = data->n - 1 - i;
-        printf("x%d=%.4f(y=%.4f) ", node_index, 
-               data->x[node_index], data->y[node_index]);
+        printf("x%d=%.4f(y=%.4f) ", indices[i], 
+               data->x[indices[i]], data->y[indices[i]]);
     }
     printf("\n");
 }
 
-// ПРОВЕРКА в узловой точке
-void test_backward_at_node(DataTable *data, int node_index, int degree) {
+// проверка в узловой точке
+void test_at_node(DataTable *data, int node_index, int indices[], int degree, const char* method) {
     double x_node = data->x[node_index];
     double y_actual = data->y[node_index];
-    double y_calculated = newton_backward(data, x_node, degree);
+    double y_calculated;
+    
+    if (strcmp(method, "forward") == 0) {
+        y_calculated = newton_forward(data, x_node, indices, degree);
+    } else {
+        y_calculated = newton_backward(data, x_node, indices, degree);
+    }
+    
     double error = fabs(y_actual - y_calculated);
     
-    printf("\n");
-
     printf("Проверка в узле x%d=%.4f:\n", node_index, x_node);
-    printf(" Фактическое:  y = %10.6f\n", y_actual);
-    printf(" Вычисленное: P%d = %10.6f\n", degree, y_calculated);
-    printf(" Погрешность:     %10.2e\n", error);
-    
-    if (error < 1e-10) {
-        printf("Многочлен точно проходит через узел\n");
-    } else {
-        printf("Замечание: погрешность значительная\n");
-    }
-    printf("\n");
-}
-
-void plot_newton_graphs(DataTable *data, double x_star) {
-    FILE *data_file = fopen("newton_data.txt", "w");
-    FILE *gnuplot_script = fopen("plot_newton.gnu", "w");
-    
-    if (!data_file || !gnuplot_script) {
-        printf("Ошибка создания файлов для графиков\n");
-        return;
-    }
-    
-    // Записываем исходные точки
-    fprintf(data_file, "# ИСХОДНЫЕ ТОЧКИ\n");
-    for (int i = 0; i < data->n; i++) {
-        fprintf(data_file, "%.6f %.6f\n", data->x[i], data->y[i]);
-    }
-    fprintf(data_file, "\n\n");
-    
-    // Записываем точки для P2 (многочлен 2-й степени)
-    fprintf(data_file, "# МНОГОЧЛЕН P2(x) 2-й СТЕПЕНИ\n");
-    for (double xi = -1.5; xi <= 2.5; xi += 0.01) {
-        double yi = newton_backward(data, xi, 2);
-        fprintf(data_file, "%.6f %.6f\n", xi, yi);
-    }
-    fprintf(data_file, "\n\n");
-    
-    // Записываем точки для P3 (многочлен 3-й степени)
-    fprintf(data_file, "# МНОГОЧЛЕН P3(x) 3-й СТЕПЕНИ\n");
-    for (double xi = -1.5; xi <= 2.5; xi += 0.01) {
-        double yi = newton_backward(data, xi, 3);
-        fprintf(data_file, "%.6f %.6f\n", xi, yi);
-    }
-    fprintf(data_file, "\n\n");
-    
-    // Записываем узлы, используемые для P2
-    fprintf(data_file, "# УЗЛЫ P2 (2-я степень)\n");
-    for (int i = 0; i <= 2; i++) {
-        int node_index = data->n - 1 - i;
-        fprintf(data_file, "%.6f %.6f\n", data->x[node_index], data->y[node_index]);
-    }
-    fprintf(data_file, "\n\n");
-    
-    // Записываем узлы, используемые для P3
-    fprintf(data_file, "# УЗЛЫ P3 (3-я степень)\n");
-    for (int i = 0; i <= 3; i++) {
-        int node_index = data->n - 1 - i;
-        fprintf(data_file, "%.6f %.6f\n", data->x[node_index], data->y[node_index]);
-    }
-    fprintf(data_file, "\n\n");
-    
-    // Записываем точку интерполяции
-    fprintf(data_file, "# ТОЧКА ИНТЕРПОЛЯЦИИ\n");
-    double p2_star = newton_backward(data, x_star, 2);
-    double p3_star = newton_backward(data, x_star, 3);
-    fprintf(data_file, "%.6f %.6f\n", x_star, p2_star);
-    fprintf(data_file, "%.6f %.6f\n", x_star, p3_star);
-    
-    fclose(data_file);
-    
-    // Создаем скрипт для gnuplot
-    fprintf(gnuplot_script, "set terminal pngcairo size 1200,800 enhanced font 'Arial,12'\n");
-    fprintf(gnuplot_script, "set output 'newton_graph.png'\n");
-    fprintf(gnuplot_script, "set title 'Интерполяция Ньютона (вторая формула) - Вариант 44' font 'Arial,14'\n");
-    fprintf(gnuplot_script, "set xlabel 'x' font 'Arial,12'\n");
-    fprintf(gnuplot_script, "set ylabel 'y' font 'Arial,12'\n");
-    fprintf(gnuplot_script, "set grid\n");
-    fprintf(gnuplot_script, "set key top left box\n");
-    fprintf(gnuplot_script, "set xrange [-1.5:2.5]\n");
-    fprintf(gnuplot_script, "set yrange [-3:2]\n");
-    
-    // Настройка стилей линий и точек
-    fprintf(gnuplot_script, "set style line 1 lc rgb 'black' pt 7 ps 1.5\n");
-    fprintf(gnuplot_script, "set style line 2 lc rgb 'red' lw 2\n");
-    fprintf(gnuplot_script, "set style line 3 lc rgb 'blue' lw 2\n");
-    fprintf(gnuplot_script, "set style line 4 lc rgb 'dark-red' pt 2 ps 2\n");
-    fprintf(gnuplot_script, "set style line 5 lc rgb 'dark-blue' pt 4 ps 2\n");
-    fprintf(gnuplot_script, "set style line 6 lc rgb 'green' pt 9 ps 2\n");
-    
-    fprintf(gnuplot_script, "plot 'newton_data.txt' index 0 with points ls 1 title 'Все исходные точки', \\\n");
-    fprintf(gnuplot_script, "     'newton_data.txt' index 1 with lines ls 2 title 'P2(x) (2-я степень)', \\\n");
-    fprintf(gnuplot_script, "     'newton_data.txt' index 2 with lines ls 3 title 'P3(x) (3-я степень)', \\\n");
-    fprintf(gnuplot_script, "     'newton_data.txt' index 3 with points ls 4 title 'Узлы P2', \\\n");
-    fprintf(gnuplot_script, "     'newton_data.txt' index 4 with points ls 5 title 'Узлы P3', \\\n");
-    fprintf(gnuplot_script, "     'newton_data.txt' index 5 with points ls 6 title 'x*=%.3f'\n", x_star);
-    
-    fclose(gnuplot_script);
-    
-    // Запускаем gnuplot
-    system("gnuplot plot_newton.gnu");
-    printf("График сохранен в файл: newton_graph.png\n");
+    printf("  Фактическое значение:  y = %10.6f\n", y_actual);
+    printf("  Интерполированное: P%d = %10.6f\n", degree, y_calculated);
+    printf("  Погрешность:  %10.2f\n", error);
 }
 
 int main() {
@@ -206,38 +156,82 @@ int main() {
     }
     
     printf("=== ВАРИАНТ 44 ===\n");
-    printf("=== ВТОРАЯ ФОРМУЛА НЬЮТОНА ===\n");
-    
-    // вычисление разделенных разностей
-    calculate_divided_differences(&data);
-    
+    printf("=== ИНТЕРПОЛЯЦИЯ НЬЮТОНА ===\n");
     printf("Точка интерполяции: x* = %.3f\n\n", x_star);
+        
+    printf("1.1 МНОГОЧЛЕН 2-Й СТЕПЕНИ\n");
+    int nodes_P2_1[] = {5, 6, 7}; // точки 0.94, 1.39, 1.84 (ближайшие к x*)
+    calculate_divided_differences_for_nodes(&data, nodes_P2_1, 3);
     
-    // МНОГОЧЛЕН 2-Й СТЕПЕНИ 
-    printf("=== МНОГОЧЛЕН 2-Й СТЕПЕНИ ===\n");
-    double p2 = newton_backward(&data, x_star, 2);
-    double error_p2 = estimate_backward_error(&data, x_star, 2);
+    print_selected_nodes(&data, nodes_P2_1, 2);
+    double p2_1 = newton_forward(&data, x_star, nodes_P2_1, 2);
+    double error_p2_1 = estimate_error(&data, x_star, nodes_P2_1, 2);
     
-    print_backward_nodes(&data, 2);  
-    printf(" P2(%.3f) = %12.8f\n", x_star, p2);
-    printf(" Оценка погрешности: %12.8f\n", error_p2);
+    printf(" P2(%.3f) = %12.8f\n", x_star, p2_1);
+    printf(" Оценка погрешности: %12.8f\n\n", error_p2_1);
     
+    test_at_node(&data, 6, nodes_P2_1, 2, "forward");
+    
+    printf("\n1.2 МНОГОЧЛЕН 2-Й СТЕПЕНИ\n");
+    int nodes_P2_2[] = {6, 7, 8}; // точки 1.39, 1.84, 2.29 (конечные точки)
+    calculate_divided_differences_for_nodes(&data, nodes_P2_2, 3);
+    
+    print_selected_nodes(&data, nodes_P2_2, 2);
+    double p2_2 = newton_backward(&data, x_star, nodes_P2_2, 2);
+    double error_p2_2 = estimate_error(&data, x_star, nodes_P2_2, 2);
+    
+    printf(" P2(%.3f) = %12.8f\n", x_star, p2_2);
+    printf(" Оценка погрешности: %12.8f\n\n", error_p2_2);
+    
+    test_at_node(&data, 7, nodes_P2_2, 2, "backward");
+    
+    printf("\n 2.1 МНОГОЧЛЕН 3-Й СТЕПЕНИ\n");
+    int nodes_P3_1[] = {4, 5, 6, 7}; // точки 0.49, 0.94, 1.39, 1.84
+    calculate_divided_differences_for_nodes(&data, nodes_P3_1, 4);
+    
+    print_selected_nodes(&data, nodes_P3_1, 3);
+    double p3_1 = newton_forward(&data, x_star, nodes_P3_1, 3);
+    double error_p3_1 = estimate_error(&data, x_star, nodes_P3_1, 3);
+    
+    printf(" P3(%.3f) = %12.8f\n", x_star, p3_1);
+    printf(" Оценка погрешности: %12.8f\n\n", error_p3_1);
+    
+    test_at_node(&data, 6, nodes_P3_1, 3, "forward");
+    
+    printf("\nМНОГОЧЛЕН 3-Й СТЕПЕНИ\n");
+    int nodes_P3_2[] = {5, 6, 7, 8}; // точки 0.94, 1.39, 1.84, 2.29
+    calculate_divided_differences_for_nodes(&data, nodes_P3_2, 4);
+    
+    print_selected_nodes(&data, nodes_P3_2, 3);
+    double p3_2 = newton_backward(&data, x_star, nodes_P3_2, 3);
+    double error_p3_2 = estimate_error(&data, x_star, nodes_P3_2, 3);
+    
+    printf(" P3(%.3f) = %12.8f\n", x_star, p3_2);
+    printf(" Оценка погрешности: %12.8f\n\n", error_p3_2);
+    
+    test_at_node(&data, 8, nodes_P3_2, 3, "backward");
 
-    test_backward_at_node(&data, 7, 2);
-    
-    // МНОГОЧЛЕН 3-Й СТЕПЕНИ
-    printf("=== МНОГОЧЛЕН 3-Й СТЕПЕНИ ===\n");
-    double p3 = newton_backward(&data, x_star, 3);
-    double error_p3 = estimate_backward_error(&data, x_star, 3);
-    
-    print_backward_nodes(&data, 3);
-    printf(" P3(%.3f) = %12.8f\n", x_star, p3);
-    printf(" Оценка погрешности: %12.8f\n", error_p3);
-    
-    test_backward_at_node(&data, 8, 3);  
+    printf("\n2.3 МНОГОЧЛЕН 3-Й СТЕПЕНИ\n");
+    int nodes_P3_3[] = {3, 4, 5, 6}; // точки 0.04, 0.49, 0.94, 1.39
+    calculate_divided_differences_for_nodes(&data, nodes_P3_3, 4);
 
-    printf("\n=== ПОСТРОЕНИЕ ГРАФИКОВ ===\n");
-    plot_newton_graphs(&data, x_star);
+    print_selected_nodes(&data, nodes_P3_3, 3);
+    double p3_3 = newton_forward(&data, x_star, nodes_P3_3, 3);  
+    double error_p3_3 = estimate_error(&data, x_star, nodes_P3_3, 3);
+
+    printf(" P3(%.3f) = %12.8f\n", x_star, p3_3);
+    printf(" Оценка погрешности: %12.8f\n\n", error_p3_3);
+
+    test_at_node(&data, 5, nodes_P3_3, 3, "forward");  
+    
+    printf("\n=== СРАВНЕНИЕ РЕЗУЛЬТАТОВ ===\n");
+    printf("P2 (вариант 1): %12.8f\n", p2_1);
+    printf("P2 (вариант 2): %12.8f\n", p2_2);
+    printf("P3 (вариант 3): %12.8f\n", p3_1);
+    printf("P3 (вариант 4): %12.8f\n", p3_2);
+    printf("P3 (вариант 5): %12.8f\n", p3_3);
+    printf("Разница P2 методов: %12.8f\n", fabs(p2_1 - p2_2));
+    printf("Разница P3 методов: %12.8f\n\n", fabs(p3_1 - p3_2));
 
     return 0;
 }

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
-
+//показать н аграфики ошибку с 4 степенью
 #define N 10  //количество точек
 
 void gauss_solve(int n, double A[n][n+1], double x[n]) {

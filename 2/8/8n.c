@@ -2,455 +2,187 @@
 #include <math.h>
 #include <stdlib.h>
 
-#define EPS 0.0001
 #define MAX_ITER 1000
+#define EPS 1e-6
 
-int UL_decomposition(int n, double A[n][n], double LU[n][n]) {
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
-            LU[i][j] = A[i][j];
-        }
-    }
-    
-    for (int i = 0; i < n; i++) {
-        for (int j = i + 1; j < n; j++) {
-            if (fabs(LU[i][i]) < 1e-12) {
-                printf("Ошибка: нулевой диагональный элемент U[%d][%d]\n", i, i);
-                return 0;
-            }
-            LU[j][i] /= LU[i][i]; 
-            
-            for (int k = i + 1; k < n; k++) {
-                LU[j][k] -= LU[j][i] * LU[i][k];
-            }
-        }
-    }
-    return 1;
-}
-
-// Ly = b
-void solve_L(int n, double LU[n][n], double b[n], double y[n]) {
-    for (int i = 0; i < n; i++) {
-        y[i] = b[i];
-        for (int j = 0; j < i; j++) {
-            y[i] -= LU[i][j] * y[j];
-        }
-    }
-}
-
-// Ux = y
-void solve_U(int n, double LU[n][n], double y[n], double x[n]) {
-    for (int i = n - 1; i >= 0; i--) {
-        x[i] = y[i];
-        for (int j = i + 1; j < n; j++) {
-            x[i] -= LU[i][j] * x[j];
-        }
-        x[i] /= LU[i][i];
-    }
-}
-
-int inverse_matrix(int n, double A[n][n], double invA[n][n]) {
-    double LU[n][n];
-    double y[n], x[n];
-    double e[n];
-    
-    if (!UL_decomposition(n, A, LU)) {
-        return 0;
-    }
-    
-    for (int j = 0; j < n; j++) {
-        for (int i = 0; i < n; i++) {
-            e[i] = (i == j) ? 1.0 : 0.0;
-        }
-        
-        solve_L(n, LU, e, y);
-        solve_U(n, LU, y, x);
-        
-        for (int i = 0; i < n; i++) {
-            invA[i][j] = x[i];
-        }
-    }
-    return 1;
-}
-
+// Исходная система уравнений
 void f(double x1, double x2, double *f1, double *f2) {
     *f1 = x1*x1 + x2*x2 - 5*sin(x1) - 9;
     *f2 = 2*x1*x1 + 2*x1*x2 - 3*x2*x2 - 4*x1 - x2*cos(x1) + 3;
 }
 
-void jacobian(double x1, double x2, double J[2][2]) {
-    J[0][0] = 2*x1 - 5*cos(x1);
-    J[0][1] = 2*x2;
-    J[1][0] = 4*x1 + 2*x2 - 4 + x2*sin(x1);
-    J[1][1] = 2*x1 - 6*x2 - cos(x1);
+// Итерирующие функции (метод релаксации с меньшим шагом)
+void phi(double x1, double x2, double *phi1, double *phi2) {
+    // Используем меньший параметр релаксации для лучшей сходимости
+    double lambda1 = 0.02;
+    double lambda2 = 0.02;
+    
+    *phi1 = x1 - lambda1 * (x1*x1 + x2*x2 - 5*sin(x1) - 9);
+    *phi2 = x2 - lambda2 * (2*x1*x1 + 2*x1*x2 - 3*x2*x2 - 4*x1 - x2*cos(x1) + 3);
 }
 
-int newton_method(double *x1, double *x2) {
-    double x1_old, x2_old;
-    double f1, f2;
-    double J[2][2], J_inv[2][2];
-    double dx[2];
-    int iter = 0;
-    double dx_norm = 1.0;
+// Вычисление частных производных для проверки сходимости
+void calculate_jacobian(double x1, double x2, double jacobian[2][2]) {
+    double lambda1 = 0.02;
+    double lambda2 = 0.02;
     
-    printf("Метод Ньютона (с LU-разложением):\n");
-    printf("k\tx1\t\tx2\t\tf1\t\tf2\n");
+    // ∂Φ1/∂x1 = 1 - λ1*(2x1 - 5*cos(x1))
+    jacobian[0][0] = 1 - lambda1 * (2*x1 - 5*cos(x1));
     
-    do {
-        x1_old = *x1;
-        x2_old = *x2;
-        
-        f(*x1, *x2, &f1, &f2);
-        
-        if (fabs(f1) < EPS && fabs(f2) < EPS) break;
-        
-        jacobian(*x1, *x2, J);
-        
-        if (!inverse_matrix(2, J, J_inv)) {
-            dx[0] = -0.01 * f1;
-            dx[1] = -0.01 * f2;
-        } else {
-            dx[0] = -(J_inv[0][0] * f1 + J_inv[0][1] * f2);
-            dx[1] = -(J_inv[1][0] * f1 + J_inv[1][1] * f2);
-        }
-        
-        *x1 += dx[0];
-        *x2 += dx[1];
-        
-        dx_norm = sqrt((*x1 - x1_old)*(*x1 - x1_old) + 
-                      (*x2 - x2_old)*(*x2 - x2_old));
-        
-        printf("%d\t%.6f\t%.6f\t%.2e\t%.2e\n", iter, *x1, *x2, f1, f2);
-        
-        if (++iter >= MAX_ITER) break;
-        
-    } while (dx_norm > EPS);
+    // ∂Φ1/∂x2 = -λ1*(2x2)
+    jacobian[0][1] = -lambda1 * (2*x2);
     
-    return iter;
+    // ∂Φ2/∂x1 = -λ2*(4x1 + 2x2 - 4 + x2*sin(x1))
+    jacobian[1][0] = -lambda2 * (4*x1 + 2*x2 - 4 + x2*sin(x1));
+    
+    // ∂Φ2/∂x2 = 1 - λ2*(2x1 - 6x2 - cos(x1))
+    jacobian[1][1] = 1 - lambda2 * (2*x1 - 6*x2 - cos(x1));
 }
 
-// НОВАЯ функция проверки сходимости с подбором λ
-int check_simple_iteration_convergence(double x1, double x2, double lambda1, double lambda2) {
-    double J[2][2];
-    jacobian(x1, x2, J);
+// Проверка условия сходимости
+int check_convergence(double x1, double x2) {
+    double jacobian[2][2];
+    calculate_jacobian(x1, x2, jacobian);
     
-    // Матрица производных итерирующих функций: Φi = xi + λi·fi
-    double Phi_J[2][2];
-    Phi_J[0][0] = 1 + lambda1 * J[0][0];  // dΦ1/dx1
-    Phi_J[0][1] = lambda1 * J[0][1];      // dΦ1/dx2
-    Phi_J[1][0] = lambda2 * J[1][0];      // dΦ2/dx1  
-    Phi_J[1][1] = 1 + lambda2 * J[1][1];  // dΦ2/dx2
+    // Проверяем условие сходимости: сумма модулей элементов в каждой строке < 1
+    double norm1 = fabs(jacobian[0][0]) + fabs(jacobian[0][1]);
+    double norm2 = fabs(jacobian[1][0]) + fabs(jacobian[1][1]);
     
-    // Норма матрицы (кубическая)
-    double norm1 = fabs(Phi_J[0][0]) + fabs(Phi_J[0][1]);
-    double norm2 = fabs(Phi_J[1][0]) + fabs(Phi_J[1][1]);
-    double norm = (norm1 > norm2) ? norm1 : norm2;
-        
-    if (norm < 1.0) {
-        printf("Условие сходимости ВЫПОЛНЕНО (||J_Φ|| = %.6f < 1) при λ=(%.4f,%.4f)\n", norm, lambda1, lambda2);
-        return 1;
-    } else {
-        printf("Условие сходимости НЕ ВЫПОЛНЕНО (||J_Φ|| = %.6f >= 1) при λ=(%.4f,%.4f)\n", norm, lambda1, lambda2);
-        return 0;
-    }
+    printf("Матрица Якоби:\n");
+    printf("∂Φ1/∂x1 = %.6f, ∂Φ1/∂x2 = %.6f\n", jacobian[0][0], jacobian[0][1]);
+    printf("∂Φ2/∂x1 = %.6f, ∂Φ2/∂x2 = %.6f\n", jacobian[1][0], jacobian[1][1]);
+    printf("Нормы: %.6f, %.6f\n", norm1, norm2);
+    
+    return (norm1 < 1.0 && norm2 < 1.0);
 }
 
-// НОВАЯ функция автоматического подбора λ
-void find_optimal_lambda(double x1, double x2, double *lambda1, double *lambda2) {
-    double best_lambda1 = 0.001, best_lambda2 = 0.001;
-    double best_norm = 1000.0;
-    
-    // Пробуем разные значения λ
-    double lambda_values[] = {0.0001, 0.0005, 0.001, 0.005, 0.01, 0.02, 0.05, 0.1, -0.001, -0.01};
-    int num_lambdas = sizeof(lambda_values) / sizeof(lambda_values[0]);
-    
-    for (int i = 0; i < num_lambdas; i++) {
-        for (int j = 0; j < num_lambdas; j++) {
-            double lambda1_test = lambda_values[i];
-            double lambda2_test = lambda_values[j];
-            
-            double J[2][2];
-            jacobian(x1, x2, J);
-            
-            double Phi_J[2][2];
-            Phi_J[0][0] = 1 + lambda1_test * J[0][0];
-            Phi_J[0][1] = lambda1_test * J[0][1];
-            Phi_J[1][0] = lambda2_test * J[1][0];
-            Phi_J[1][1] = 1 + lambda2_test * J[1][1];
-            
-            double norm1 = fabs(Phi_J[0][0]) + fabs(Phi_J[0][1]);
-            double norm2 = fabs(Phi_J[1][0]) + fabs(Phi_J[1][1]);
-            double norm = (norm1 > norm2) ? norm1 : norm2;
-            
-            if (norm < best_norm && norm < 0.9) {
-                best_norm = norm;
-                best_lambda1 = lambda1_test;
-                best_lambda2 = lambda2_test;
-            }
-        }
-    }
-    
-    *lambda1 = best_lambda1;
-    *lambda2 = best_lambda2;
-    printf("Оптимальные параметры: λ1=%.6f, λ2=%.6f (||J_Φ||=%.6f)\n", best_lambda1, best_lambda2, best_norm);
-}
-
-// НОВАЯ итерационная функция с разными методами
-void phi_simple_theory(double x1, double x2, double *x1_new, double *x2_new, int method_type) {
-    double f1, f2;
-    f(x1, x2, &f1, &f2);
-    
-    double lambda1, lambda2;
-    
-    if (method_type == 1) {
-        // Для корней в правой полуплоскости (положительные x1)
-        lambda1 = -0.01;
-        lambda2 = -0.01;
-    }
-    else if (method_type == 2) {
-        // Для корней в левой полуплоскости (отрицательные x1)
-        lambda1 = 0.01;  
-        lambda2 = 0.01;
-    }
-    else if (method_type == 3) {
-        // Смешанный вариант
-        lambda1 = -0.005;
-        lambda2 = 0.005;
-    }
-    else {
-        // Автоматический подбор
-        find_optimal_lambda(x1, x2, &lambda1, &lambda2);
-    }
-    
-    *x1_new = x1 + lambda1 * f1;
-    *x2_new = x2 + lambda2 * f2;
-}
-
-// НОВАЯ улучшенная функция метода простых итераций
-int simple_iteration_adaptive(double *x1, double *x2) {
-    double x1_old, x2_old;
-    int iter = 0;
-    double dx_norm = 1.0;
-    
-    printf("Метод простой итерации:\n");
-    printf("Начальное приближение: x1 = %f, x2 = %f\n", *x1, *x2);
-    
-    // Определяем тип метода по начальному приближению
-    int method_type;
-    if (*x1 > 0) {
-        method_type = 1;  // Для положительных x1
-        printf("Используется метод для положительных x1\n");
-    } else {
-        method_type = 2;  // Для отрицательных x1  
-        printf("Используется метод для отрицательных x1\n");
-    }
-    
-    // Проверяем сходимость
-    double lambda1, lambda2;
-    if (method_type == 1) {
-        lambda1 = -0.01; lambda2 = -0.01;
-    } else {
-        lambda1 = 0.01; lambda2 = 0.01;
-    }
-    check_simple_iteration_convergence(*x1, *x2, lambda1, lambda2);
-    
-    for (iter = 0; iter < MAX_ITER; iter++) {
-        x1_old = *x1;
-        x2_old = *x2;
-        
-        // Вычисляем x^(k+1) = Φ(x^(k))
-        double x1_new, x2_new;
-        phi_simple_theory(*x1, *x2, &x1_new, &x2_new, method_type);
-        
-        if (!isfinite(x1_new) || !isfinite(x2_new)) {
-            printf("Расходимость на итерации %d!\n", iter);
-            return -1;
-        }
-        
-        *x1 = x1_new;
-        *x2 = x2_new;
-        
-        double f1, f2;
-        f(*x1, *x2, &f1, &f2);
-        
-        dx_norm = sqrt((*x1 - x1_old)*(*x1 - x1_old) + 
-                      (*x2 - x2_old)*(*x2 - x2_old));
-        
-        double residual = sqrt(f1*f1 + f2*f2);
-        
-        if (iter % 100 == 0 && iter > 0) {
-            printf("Итерация %d: x1 = %.8f, x2 = %.8f, ошибка = %e, невязка = %e\n", 
-                   iter, *x1, *x2, dx_norm, residual);
-        }
-        
-        if (dx_norm < EPS && residual < EPS) {
-            printf("Сходимость достигнута на итерации %d\n", iter);
-            printf("Корень: x1 = %.6f, x2 = %.6f\n", *x1, *x2);
-            printf("Невязка: f1 = %e, f2 = %e\n", f1, f2);
-            return iter;
-        }
-        
-        // Адаптация метода если медленно сходится
-        if (iter > 50 && dx_norm > 0.1) {
-            printf("Медленная сходимость, пробуем другой метод...\n");
-            method_type = 3;  // Переключаемся на смешанный метод
-        }
-    }
-    
-    printf("Достигнут предел итераций (%d)\n", MAX_ITER);
-    return iter;
-}
-
-void phi_seidel_theory(double x1, double x2, double *x1_new, double *x2_new) {
-    double f1, f2;
-    double lambda1 = 0.001, lambda2 = 0.001;
-    
-    f(x1, x2, &f1, &f2);
-    *x1_new = x1 + lambda1 * f1;
-    
-    f(*x1_new, x2, &f1, &f2); //подставляем вычесленное x1_new
-    *x2_new = x2 + lambda2 * f2;
-}
-
-int seidel_method_adaptive(double *x1, double *x2) {
-    double x1_old, x2_old;
+// Метод простой итерации
+int simple_iteration(double x1_0, double x2_0, double *x1_result, double *x2_result) {
+    double x1_prev = x1_0, x2_prev = x2_0;
     double x1_new, x2_new;
     int iter = 0;
-    double dx_norm = 1.0;
     
-    printf("Метод Зейделя:\n");
-    //printf("k\tx1\t\tx2\t\tf1\t\tf2\t\t||dx||\n");
+    printf("\n=== Начальное приближение: (%.6f, %.6f) ===\n", x1_0, x2_0);
+    
+    // Проверяем условие сходимости
+    if (!check_convergence(x1_0, x2_0)) {
+        printf("ВНИМАНИЕ: Условие сходимости не выполняется!\n");
+    } else {
+        printf("Условие сходимости выполняется.\n");
+    }
+    
+    printf("\n%4s %12s %12s %12s %12s %12s\n", 
+           "k", "x1", "x2", "Δx1", "Δx2", "Невязка");
+    printf("------------------------------------------------------------\n");
+    
+    double max_delta;
     
     do {
-        x1_old = *x1;
-        x2_old = *x2;
+        // Вычисляем новые значения
+        phi(x1_prev, x2_prev, &x1_new, &x2_new);
         
-        phi_seidel_theory(*x1, *x2, &x1_new, &x2_new);
+        // Разности
+        double dx1 = x1_new - x1_prev;
+        double dx2 = x2_new - x2_prev;
         
-        if (!isfinite(x1_new) || !isfinite(x2_new)) {
-            printf("Метод расходится!\n");
-            return -1;
-        }
-        
-        *x1 = x1_new;
-        *x2 = x2_new;
-        
+        // Вычисляем невязку
         double f1, f2;
-        f(*x1, *x2, &f1, &f2);
+        f(x1_new, x2_new, &f1, &f2);
+        double residual = sqrt(f1*f1 + f2*f2);
         
-        dx_norm = sqrt((*x1 - x1_old)*(*x1 - x1_old) + 
-                      (*x2 - x2_old)*(*x2 - x2_old));
+        printf("%4d %12.6f %12.6f %12.6f %12.6f %12.6f\n", 
+               iter, x1_new, x2_new, dx1, dx2, residual);
         
-        //printf("%d\t%.6f\t%.6f\t%.2e\t%.2e\t%.2e\n", 
-            //   iter, *x1, *x2, f1, f2, dx_norm);
+        // Максимальное изменение
+        max_delta = fmax(fabs(dx1), fabs(dx2));
         
-        if (++iter >= MAX_ITER) {
-            printf("Достигнут предел итераций\n");
+        // Обновляем значения для следующей итерации
+        x1_prev = x1_new;
+        x2_prev = x2_new;
+        iter++;
+        
+        // Критерий остановки
+        if (iter >= MAX_ITER) {
+            printf("Достигнуто максимальное количество итераций!\n");
             break;
         }
         
-    } while (dx_norm > EPS);
+    } while (max_delta > EPS && iter < 100); // Останавливаемся при малых изменениях
+    
+    *x1_result = x1_new;
+    *x2_result = x2_new;
     
     return iter;
 }
 
-//функция для поиска точек пересечения графиков эквивалентных функций
-//функция для поиска точек пересечения графиков эквивалентных функций
-void find_fixed_points(double lambda1, double lambda2) {
-    printf("Поиск точек пересечения графиков эквивалентных функций:\n");
-
-    double test_points[][2] = {
-        {2.5, 2.5}, {-1.0, -2.0}, {-1.5, 1.5},
-        {0.0, 0.0}, {1.0, 1.0}, {-1.0, 1.0},
-        {3.0, 3.0}, {-2.0, -3.0}, {-2.0, 2.0}
-    };
-    
-    for (int i = 0; i < 9; i++) {
-        double x1 = test_points[i][0];
-        double x2 = test_points[i][1];
-        double phi1, phi2;
-        
-        // Определяем method_type по x1 (как в основной функции)
-        int method_type;
-        if (x1 > 0) {
-            method_type = 1;  // Для положительных x1
-        } else {
-            method_type = 2;  // Для отрицательных x1
-        }
-        
-        phi_simple_theory(x1, x2, &phi1, &phi2, method_type);
-        
-        double f1, f2;
-        f(x1, x2, &f1, &f2);
-        
-        printf("Точка (%5.1f, %5.1f): ", x1, x2);
-        printf("f1=%.3f, f2=%.3f", f1, f2);
-        
-        //проверка на близость к неподвижной точке
-        if (fabs(phi1 - x1) < 0.1 && fabs(phi2 - x2) < 0.1) {
-            printf(" - БЛИЗКО К ПЕРЕСЕЧЕНИЮ\n");
-        } else {
-            printf(" - далеко\n");
-        }
-    }
-}
-
-//==============
-
 int main() {
-
-    find_fixed_points(0.001, 0.001);
-
-    /*
-    double solutions[][2] = {
-        {2.0, 2.5},    //корень 1 -
-        {-1.0, -2.0},  //корень 2 -
-        {-1.5, 1.5}    //корень 3 +
+    printf("РЕШЕНИЕ СИСТЕМЫ НЕЛИНЕЙНЫХ УРАВНЕНИЙ\n");
+    printf("Метод простой итерации\n");
+    printf("Точность: %.0e\n\n", EPS);
+    
+    // Более точные начальные приближения
+    double initial_approximations[][2] = {
+        {-1.3, 1.6},    // Приближение к первому корню
+        {-0.9, -2.1},   // Приближение ко второму корню  
+        {2.4, 2.5},     // Приближение к третьему корню
+        {3.0, -0.9}     // Приближение к четвертому корню
     };
-
-    x1=-1.318459, x2=1.555637 
-    x1=-0.881570, x2=-2.089052 
-    x1=2.423889, x2=2.532399 
-    x1=2.987711, x2=-0.916494 
-    (0.350, −0.830)
     
-    double solutions[][2] = {
-        {2.0, 2.5},    //корень 1 - 
-        {-1.0, -2.0},  //корень 2 -
-        {-1.5, 1.5},    //корень 3 +
-        {1.3, -1.8}
+    int num_roots = 4;
+    double results[4][2];
+    int iterations[4];
+    
+    // Решение для каждого начального приближения
+    for (int i = 0; i < num_roots; i++) {
+        double x1_0 = initial_approximations[i][0];
+        double x2_0 = initial_approximations[i][1];
+        
+        double x1_result, x2_result;
+        int iter_count = simple_iteration(x1_0, x2_0, &x1_result, &x2_result);
+        
+        results[i][0] = x1_result;
+        results[i][1] = x2_result;
+        iterations[i] = iter_count;
+        
+        // Проверка точности найденного корня
+        double f1, f2;
+        f(x1_result, x2_result, &f1, &f2);
+        
+        printf("\nКорень %d: x1 = %.6f, x2 = %.6f\n", i+1, x1_result, x2_result);
+        printf("Количество итераций: %d\n", iter_count);
+        printf("Невязка: f1 = %.2e, f2 = %.2e\n", f1, f2);
+        printf("====================================================\n\n");
+    }
+    
+    // Итоговая таблица результатов
+    printf("\nИТОГОВЫЕ РЕЗУЛЬТАТЫ:\n");
+    printf("-------------------------------------------------------------\n");
+    printf("%-8s %-15s %-15s %-12s %-15s\n", "Корень", "x1", "x2", "Итерации", "Невязка");
+    printf("-------------------------------------------------------------\n");
+    for (int i = 0; i < num_roots; i++) {
+        double f1, f2;
+        f(results[i][0], results[i][1], &f1, &f2);
+        double residual = sqrt(f1*f1 + f2*f2);
+        printf("%-8d %-15.6f %-15.6f %-12d %-15.2e\n", 
+               i+1, results[i][0], results[i][1], iterations[i], residual);
+    }
+    
+    // Сравнение с ожидаемыми корнями
+    printf("\nСРАВНЕНИЕ С ОЖИДАЕМЫМИ КОРНЯМИ:\n");
+    printf("-------------------------------------------------------------\n");
+    printf("%-8s %-15s %-15s %-15s %-15s\n", "Корень", "Найден x1", "Ожидаемый x1", "Найден x2", "Ожидаемый x2");
+    printf("-------------------------------------------------------------\n");
+    
+    double expected[][2] = {
+        {-1.318459, 1.555637},
+        {-0.881570, -2.089052},
+        {2.423889, 2.532399},
+        {2.987711, -0.916494}
     };
-    */
     
-    
-    
-    double solutions[][2] = {
-        {-1.5, 1.5},    // Для корня 1 (-1.318459, 1.555637)
-        {-1.0, -2.0},  //корень 2 -
-        {-1.5, 1.5},    //корень 3 +
-        {3.0, -1.0}     // Для корня 4 (2.987711, -0.916494)
-    };
-
-    for (int i = 0; i < 4; i++) { //3
-        printf("\n=== Корень %d ===\n", i+1);
-        
-        double x1_n = solutions[i][0], x2_n = solutions[i][1];
-        double x1_s = solutions[i][0], x2_s = solutions[i][1];
-        double x1_z = solutions[i][0], x2_z = solutions[i][1];
-        
-        printf("\n1. ");
-        int iter_n = newton_method(&x1_n, &x2_n);
-        
-        printf("\n2. ");
-        int iter_s = simple_iteration_adaptive(&x1_s, &x2_s);
-        
-        printf("\n3. ");
-        int iter_z = seidel_method_adaptive(&x1_z, &x2_z);
-        
-        printf("\nИтоговые решения:\n");
-        printf("Ньютон:    x1=%.6f, x2=%.6f (итераций: %d)\n", x1_n, x2_n, iter_n);
-        if (iter_s > 0) printf("П.итерации: x1=%.6f, x2=%.6f (итераций: %d)\n", x1_s, x2_s, iter_s);
-        if (iter_z > 0) printf("Зейделя:    x1=%.6f, x2=%.6f (итераций: %d)\n", x1_z, x2_z, iter_z);
+    for (int i = 0; i < num_roots; i++) {
+        printf("%-8d %-15.6f %-15.6f %-15.6f %-15.6f\n", 
+               i+1, results[i][0], expected[i][0], results[i][1], expected[i][1]);
     }
     
     return 0;

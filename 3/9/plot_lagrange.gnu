@@ -11,4 +11,5 @@ plot 'lagrange_data.txt' index 0 with points pt 7 ps 1.5 lc rgb 'black' title '�
      'lagrange_data.txt' index 1 with lines lw 2 lc rgb 'red' title 'L2(x) (2-я степень)', \
      'lagrange_data.txt' index 2 with lines lw 2 lc rgb 'blue' title 'L3(x) (3-я степень)', \
      'lagrange_data.txt' index 3 with points pt 2 ps 2 lc rgb 'dark-red' title 'Узлы L2', \
-     'lagrange_data.txt' index 4 with points pt 4 ps 2 lc rgb 'dark-blue' title 'Узлы L3'
+     'lagrange_data.txt' index 4 with points pt 4 ps 2 lc rgb 'dark-blue' title 'Узлы L3', \
+     'lagrange_data.txt' index 5 with points pt 9 ps 3 lc rgb 'green' title 'x* = 1.708'

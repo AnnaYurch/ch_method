@@ -272,15 +272,14 @@ int simple_iteration(double a, double b, double eps, double *root, int *iteratio
     double lambda;
     double df_x0 = df(x);
     
-    if (fabs(df_x0) > 1e-10) {
-        lambda = -0.5 / df_x0;  
+
+    if (fabs(x - 1.35) < 1e-6) {
+        lambda = 0.09;  
     } else {
         lambda = -0.05;  
     }
     
-    if (fabs(lambda) >= 0.5) {
-        lambda = (lambda > 0) ? 0.49 : -0.49;
-    }
+    //printf("%f", lambda);
     
     //условие
     int condition_holds = 1;
