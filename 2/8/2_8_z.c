@@ -5,8 +5,8 @@
 #define MAX_ITER 1000
 #define EPS 0.0001
 
-#define LAMBDA1_X1 0.15
-#define LAMBDA1_X2 0.15
+#define LAMBDA1_X1 0.05
+#define LAMBDA1_X2 0.05
 
 #define LAMBDA2_X1 0.03
 #define LAMBDA2_X2 0.03
@@ -50,10 +50,10 @@ int main() {
     };
 
     /*
-        x1=-1.318459, x2=1.555637 
+        x1=-1.318459, x2=1.555637 +
         x1=-0.881570, x2=-2.089052 
         x1=2.423889, x2=2.532399 
-        x1=2.987711, x2=-0.916494 
+        x1=2.987711, x2=-0.916494 +
     */
     
     int num_approximations = sizeof(initial_approximations) / sizeof(initial_approximations[0]);
@@ -89,7 +89,7 @@ double f2(double x1, double x2) {
     return 2 * x1 * x1 + 2 * x1 * x2 - 3 * x2 * x2 - 4 * x1 - x2 * cos(x1) + 3;
 }
 
-// Корень 1: (-1.318459, 1.555637)
+//корень 1: (-1.318459, 1.555637)
 double phi1_root1(double x1, double x2) {
     return x1 + LAMBDA1_X1 * (x1*x1 + x2*x2 - 5*sin(x1) - 9);
 }
@@ -100,29 +100,56 @@ double phi2_root1(double x1, double x2) {
 
 //корень 2: (-0.881570, -2.089052)
 double phi1_root2(double x1, double x2) {
-    return x1 + LAMBDA2_X1 * (x1*x1 + x2*x2 - 5*sin(x1) - 9);
+    double lambda = 0.001; 
+    double delta = lambda * (x1*x1 + x2*x2 - 5*sin(x1) - 9);
+           
+    return x1 + delta;
 }
 
 double phi2_root2(double x1, double x2) {
-    return x2 + LAMBDA2_X2 * (2*x1*x1 + 2*x1*x2 - 3*x2*x2 - 4*x1 - x2*cos(x1) + 3);
+    double lambda = 0.0006;  
+    double delta = lambda * (2*x1*x1 + 2*x1*x2 - 3*x2*x2 - 4*x1 - x2*cos(x1) + 3);
+    
+    return x2 + delta;
 }
 
 //корень 3: (2.423889, 2.532399)
 double phi1_root3(double x1, double x2) {
-    return x1 + LAMBDA3_X1 * (x1*x1 + x2*x2 - 5*sin(x1) - 9);
+    double arg = 9 + 5*sin(x1) - x2*x2;
+    return sqrt(arg); 
 }
 
 double phi2_root3(double x1, double x2) {
-    return x2 + LAMBDA3_X2 * (2*x1*x1 + 2*x1*x2 - 3*x2*x2 - 4*x1 - x2*cos(x1) + 3);
+    double lambda = 0.003;
+    double delta = lambda * (2*x1*x1 + 2*x1*x2 - 3*x2*x2 - 4*x1 - x2*cos(x1) + 3);
+      
+    return x2 + delta;
 }
 
 //корень 4: (2.987711, -0.916494)
 double phi1_root4(double x1, double x2) {
-    return x1 + LAMBDA4_X1 * (x1*x1 + x2*x2 - 5*sin(x1) - 9);
+    double arg = 9 + 5*sin(x1) - x2*x2;
+    return sqrt(arg); 
 }
 
 double phi2_root4(double x1, double x2) {
-    return x2 + LAMBDA4_X2 * (2*x1*x1 + 2*x1*x2 - 3*x2*x2 - 4*x1 - x2*cos(x1) + 3);
+    double a = -3;
+    double b = 2*x1 - cos(x1);
+    double c = 2*x1*x1 - 4*x1 + 3;
+    double discriminant = b*b - 4*a*c;
+    
+    if (discriminant < 0) {
+        return x2 + 0.001 * (2*x1*x1 + 2*x1*x2 - 3*x2*x2 - 4*x1 - x2*cos(x1) + 3);
+    }
+    
+    double root1 = (-b + sqrt(discriminant)) / (2*a);
+    double root2 = (-b - sqrt(discriminant)) / (2*a);
+    
+    if (fabs(root1 + 0.916) < fabs(root2 + 0.916)) {
+        return root1;
+    } else {
+        return root2;
+    }
 }
 
 double phi1_deriv_x1(double x1, double x2, int root_num) {
@@ -238,7 +265,7 @@ int seidel_method(int root_num, double x10, double x20, double *x1_sol, double *
         }
         
         if (convergence_result == 0 && i < 1) {  
-            printf("  На итерации %d условие сходимости нарушено (норма = %.3f)\n", i + 1, max_norm);
+            //printf("  На итерации %d условие сходимости нарушено (норма = %.3f)\n", i + 1, max_norm);
         }
 
         double x1_old = x1;

@@ -89,7 +89,7 @@ double f2(double x1, double x2) {
     return 2 * x1 * x1 + 2 * x1 * x2 - 3 * x2 * x2 - 4 * x1 - x2 * cos(x1) + 3;
 }
 
-//корень 1: (-1.318459, 1.555637)
+// Корень 1: (-1.318459, 1.555637)
 double phi1_root1(double x1, double x2) {
     return x1 + LAMBDA1_X1 * (x1*x1 + x2*x2 - 5*sin(x1) - 9);
 }
@@ -100,14 +100,14 @@ double phi2_root1(double x1, double x2) {
 
 //корень 2: (-0.881570, -2.089052)
 double phi1_root2(double x1, double x2) {
-    double lambda = 0.001; 
+    double lambda = 0.0005; 
     double delta = lambda * (x1*x1 + x2*x2 - 5*sin(x1) - 9);
            
     return x1 + delta;
 }
 
 double phi2_root2(double x1, double x2) {
-    double lambda = 0.0006;  
+    double lambda = 0.0003;  
     double delta = lambda * (2*x1*x1 + 2*x1*x2 - 3*x2*x2 - 4*x1 - x2*cos(x1) + 3);
     
     return x2 + delta;
