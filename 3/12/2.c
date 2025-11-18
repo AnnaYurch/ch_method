@@ -1,7 +1,115 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+
 #define N 10  //количество точек
+
+int UL_decomposition(int n, double A[n][n], double LU[n][n]) {
+    // копируем исходную матрицу в LU
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            LU[i][j] = A[i][j];
+        }
+    }
+    
+    for (int i = 0; i < n; i++) {
+        // Вычисляем элементы L для столбца i (ниже диагонали)
+        for (int j = i + 1; j < n; j++) {
+            if (fabs(LU[i][i]) < 1e-12) {
+                printf("Ошибка: нулевой диагональный элемент U[%d][%d]\n", i, i);
+                return 0;
+            }
+            LU[j][i] /= LU[i][i]; 
+            
+            for (int k = i + 1; k < n; k++) {
+                LU[j][k] -= LU[j][i] * LU[i][k];
+            }
+        }
+    }
+    return 1;
+}
+
+// Ly = b
+void solve_L(int n, double LU[n][n], double b[n], double y[n]) {
+    for (int i = 0; i < n; i++) {
+        y[i] = b[i];
+        for (int j = 0; j < i; j++) {
+            y[i] -= LU[i][j] * y[j];  // LU[i][j] содержит L[i][j]
+        }
+        // L[i][i] = 1, поэтому не делим
+    }
+}
+
+// Ux = y (с верхней треугольной матрицей U)
+void solve_U(int n, double LU[n][n], double y[n], double x[n]) {
+    for (int i = n - 1; i >= 0; i--) {
+        x[i] = y[i];
+        for (int j = i + 1; j < n; j++) {
+            x[i] -= LU[i][j] * x[j];  // LU[i][j] содержит U[i][j]
+        }
+        x[i] /= LU[i][i];  // LU[i][i] содержит U[i][i]
+    }
+}
+
+// Функция для вычисления нормы матрицы (евклидова норма)
+double matrix_norm(int n, double A[n][n]) {
+    double norm = 0.0;
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            norm += A[i][j] * A[i][j];
+        }
+    }
+    return sqrt(norm);
+}
+
+void matrix_inverse(int n, double A[n][n], double inv[n][n]) {
+    // Используем LU-разложение для обращения матрицы
+    double LU[n][n];
+    double y[n], x[n];
+    double e[n];
+    
+    // Выполняем LU-разложение
+    if (!UL_decomposition(n, A, LU)) {
+        printf("Ошибка: матрица вырождена или почти вырождена\n");
+        // Заполняем обратную матрицу нулями в случае ошибки
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                inv[i][j] = 0.0;
+            }
+        }
+        return;
+    }
+    
+    // Для каждого столбца единичной матрицы решаем систему
+    for (int j = 0; j < n; j++) {
+        // Создаем j-ый столбец единичной матрицы
+        for (int i = 0; i < n; i++) {
+            e[i] = (i == j) ? 1.0 : 0.0;
+        }
+        
+        // Решаем систему: A * x = e_j
+        // Сначала: L * y = e_j
+        solve_L(n, LU, e, y);
+        // Затем: U * x = y
+        solve_U(n, LU, y, x);
+        
+        // Записываем результат в j-ый столбец обратной матрицы
+        for (int i = 0; i < n; i++) {
+            inv[i][j] = x[i];
+        }
+    }
+}
+
+double condition_number(int n, double A[n][n]) {
+    double norm_A = matrix_norm(n, A);
+    
+    double inv_A[n][n];
+    matrix_inverse(n, A, inv_A);
+    
+    double norm_inv_A = matrix_norm(n, inv_A);
+    
+    return norm_A * norm_inv_A;
+}
 
 void gauss_solve(int n, double A[n][n+1], double x[n]) {
     //прямой ход
@@ -48,7 +156,7 @@ double polynomial_value(double x, double coefs[], int degree) {
     }
     return result;
 }
-//число обусловоенности
+
 //вычисление суммы квадратов ошибок
 double calculate_error(double x[], double y[], double coefs[], int degree) {
     double error = 0;
@@ -166,11 +274,20 @@ int main() {
         {sum_x[1], sum_x[2], sum_xy[1]}   
     };
     
+    // Матрица системы для вычисления числа обусловленности
+    double A1_matrix[2][2] = {
+        {sum_x[0], sum_x[1]},      
+        {sum_x[1], sum_x[2]}   
+    };
+    
     double coefs1[2];
     gauss_solve(2, A1, coefs1);
     
     printf("Коэффициенты: a0 = %.6f, a1 = %.6f\n", coefs1[0], coefs1[1]);
     printf("F1(x) = %.6f + %.6f*x\n", coefs1[0], coefs1[1]);
+    
+    double cond1 = condition_number(2, A1_matrix);
+    printf("Число обусловленности системы: cond(A) = %.6e\n", cond1);
     
     double error1 = calculate_error(x, y, coefs1, 1);
     printf("Сумма квадратов ошибок: Φ1 = %.6f\n", error1);
@@ -185,11 +302,20 @@ int main() {
         {sum_x[2], sum_x[3], sum_x[4], sum_xy[2]}
     };
     
+    double A2_matrix[3][3] = {
+        {sum_x[0], sum_x[1], sum_x[2]},
+        {sum_x[1], sum_x[2], sum_x[3]},
+        {sum_x[2], sum_x[3], sum_x[4]}
+    };
+    
     double coefs2[3];
     gauss_solve(3, A2, coefs2);
     
     printf("Коэффициенты: a0 = %.6f, a1 = %.6f, a2 = %.6f\n", coefs2[0], coefs2[1], coefs2[2]);
     printf("F2(x) = %.6f + %.6f*x + %.6f*x^2\n", coefs2[0], coefs2[1], coefs2[2]);
+    
+    double cond2 = condition_number(3, A2_matrix);
+    printf("Число обусловленности системы: cond(A) = %.6e\n", cond2);
     
     double error2 = calculate_error(x, y, coefs2, 2);
     printf("Сумма квадратов ошибок: Φ2 = %.6f\n", error2);
@@ -205,11 +331,21 @@ int main() {
         {sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_xy[3]}
     };
     
+    double A3_matrix[4][4] = {
+        {sum_x[0], sum_x[1], sum_x[2], sum_x[3]},
+        {sum_x[1], sum_x[2], sum_x[3], sum_x[4]},
+        {sum_x[2], sum_x[3], sum_x[4], sum_x[5]},
+        {sum_x[3], sum_x[4], sum_x[5], sum_x[6]}
+    };
+    
     double coefs3[4];
     gauss_solve(4, A3, coefs3);
     
     printf("Коэффициенты: a0 = %.6f, a1 = %.6f, a2 = %.6f, a3 = %.6f\n", coefs3[0], coefs3[1], coefs3[2], coefs3[3]);
     printf("F3(x) = %.6f + %.6f*x + %.6f*x^2 + %.6f*x^3\n", coefs3[0], coefs3[1], coefs3[2], coefs3[3]);
+    
+    double cond3 = condition_number(4, A3_matrix);
+    printf("Число обусловленности системы: cond(A) = %.6e\n", cond3);
     
     double error3 = calculate_error(x, y, coefs3, 3);
     printf("Сумма квадратов ошибок: Φ3 = %.6f\n", error3);
@@ -226,6 +362,14 @@ int main() {
         {sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_xy[4]}
     };
 
+    double A4_matrix[5][5] = {
+        {sum_x[0], sum_x[1], sum_x[2], sum_x[3], sum_x[4]},
+        {sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_x[5]},
+        {sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6]},
+        {sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7]},
+        {sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8]}
+    };
+
     double coefs4[5];
     gauss_solve(5, A4, coefs4);
 
@@ -233,6 +377,9 @@ int main() {
         coefs4[0], coefs4[1], coefs4[2], coefs4[3], coefs4[4]);
     printf("F4(x) = %.6f + %.6f*x + %.6f*x^2 + %.6f*x^3 + %.6f*x^4\n", 
         coefs4[0], coefs4[1], coefs4[2], coefs4[3], coefs4[4]);
+
+    double cond4 = condition_number(5, A4_matrix);
+    printf("Число обусловленности системы: cond(A) = %.6e\n", cond4);
 
     double error4 = calculate_error(x, y, coefs4, 4);
     printf("Сумма квадратов ошибок: Φ4 = %.6f\n", error4);
@@ -250,6 +397,15 @@ int main() {
         {sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_x[10], sum_xy[5]}
     };
 
+    double A5_matrix[6][6] = {
+        {sum_x[0], sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_x[5]},
+        {sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6]},
+        {sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7]},
+        {sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8]},
+        {sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9]},
+        {sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_x[10]}
+    };
+
     double coefs5[6];
     gauss_solve(6, A5, coefs5);
 
@@ -257,6 +413,9 @@ int main() {
         coefs5[0], coefs5[1], coefs5[2], coefs5[3], coefs5[4], coefs5[5]);
     printf("F5(x) = %.6f + %.6f*x + %.6f*x^2 + %.6f*x^3 + %.6f*x^4 + %.6f*x^5\n", 
         coefs5[0], coefs5[1], coefs5[2], coefs5[3], coefs5[4], coefs5[5]);
+
+    double cond5 = condition_number(6, A5_matrix);
+    printf("Число обусловленности системы: cond(A) = %.6e\n", cond5);
 
     double error5 = calculate_error(x, y, coefs5, 5);
     printf("Сумма квадратов ошибок: Φ5 = %.6f\n", error5);
@@ -275,6 +434,16 @@ int main() {
         {sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_x[10], sum_x[11], sum_x[12], sum_xy[6]}
     };
 
+    double A6_matrix[7][7] = {
+        {sum_x[0], sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6]},
+        {sum_x[1], sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7]},
+        {sum_x[2], sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8]},
+        {sum_x[3], sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9]},
+        {sum_x[4], sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_x[10]},
+        {sum_x[5], sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_x[10], sum_x[11]},
+        {sum_x[6], sum_x[7], sum_x[8], sum_x[9], sum_x[10], sum_x[11], sum_x[12]}
+    };
+
     double coefs6[7];
     gauss_solve(7, A6, coefs6);
 
@@ -284,6 +453,9 @@ int main() {
     printf("F6(x) = %.6f + %.6f*x + %.6f*x^2 + %.6f*x^3 + %.6f*x^4 + %.6f*x^5 + %.6f*x^6\n", 
         coefs6[0], coefs6[1], coefs6[2], coefs6[3], coefs6[4], coefs6[5], coefs6[6]);
 
+    double cond6 = condition_number(7, A6_matrix);
+    printf("Число обусловленности системы: cond(A) = %.6e\n", cond6);
+
     double error6 = calculate_error(x, y, coefs6, 6);
     printf("Сумма квадратов ошибок: Φ6 = %.6f\n", error6);
 
@@ -291,14 +463,14 @@ int main() {
     printf("F6(%.3f) = %.6f\n\n", x_star, F6_xstar);
     
     printf("СВОДНАЯ ТАБЛИЦА РЕЗУЛЬТАТОВ:\n");
-    printf("Степень | Сумма квадратов ошибок | F(x*)\n");
-    printf("--------|------------------------|---------\n");
-    printf("   1    |       %12.6f     | %8.4f\n", error1, F1_xstar);
-    printf("   2    |       %12.6f     | %8.4f\n", error2, F2_xstar);
-    printf("   3    |       %12.6f     | %8.4f\n", error3, F3_xstar);
-    printf("   4    |       %12.6f     | %8.4f\n", error4, F4_xstar);
-    printf("   5    |       %12.6f     | %8.4f\n", error5, F5_xstar);
-    printf("   6    |       %12.6f     | %8.4f\n", error6, F6_xstar);
+    printf("Степень | Число обусловленности | Сумма квадратов ошибок | F(x*)\n");
+    printf("--------|----------------------|------------------------|---------\n");
+    printf("   1    |     %12.2f     |       %12.6f     | %8.4f\n", cond1, error1, F1_xstar);
+    printf("   2    |     %12.2f     |       %12.6f     | %8.4f\n", cond2, error2, F2_xstar);
+    printf("   3    |     %12.2f     |       %12.6f     | %8.4f\n", cond3, error3, F3_xstar);
+    printf("   4    |     %12.2f     |       %12.6f     | %8.4f\n", cond4, error4, F4_xstar);
+    printf("   5    |     %12.2f     |       %12.6f     | %8.4f\n", cond5, error5, F5_xstar);
+    printf("   6    |     %12.2f     |       %12.6f     | %8.4f\n", cond6, error6, F6_xstar);
 
     printf("\nСтроим графики...\n");
     plot_graphs(x, y, coefs1, coefs2, coefs3, coefs4, coefs5, coefs6, N);
