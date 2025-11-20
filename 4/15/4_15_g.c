@@ -22,8 +22,23 @@ typedef struct {
     double x;
     double y_num;
     double y_exact;
-    double error;
 } SolutionPoint;
+
+// Forward declarations
+double f(double x, double y);
+double df_dy(double x, double y);
+double exact_solution(double x);
+double explicit_rk_step(double x, double y, double h, ButcherTable *table);
+void gauss_solve(int n, double J[MAX_STAGES][MAX_STAGES], double F[MAX_STAGES], double delta_K[MAX_STAGES]);
+double implicit_rk_step(double x, double y, double h, ButcherTable *table);
+double rk_step(double x, double y, double h, ButcherTable *table);
+SolutionPoint* solve_ode(ButcherTable *table, double x0, double y0, 
+                        double x_end, double h, int *n_points);
+void initialize_butcher_tables(ButcherTable *tables);
+void save_plot_data(SolutionPoint *solutions[], int num_methods, int n_points, ButcherTable **tables);
+void create_gnuplot_script(int num_methods, ButcherTable **tables);
+void generate_plots();
+void print_solution(SolutionPoint *solution, int n, ButcherTable *table, double h);
 
 double f(double x, double y) {
     return y*y - y*sin(x) + cos(x);
@@ -169,6 +184,10 @@ SolutionPoint* solve_ode(ButcherTable *table, double x0, double y0,
     *n_points = n;
     
     SolutionPoint *solution = (SolutionPoint*)malloc(n * sizeof(SolutionPoint));
+    if (solution == NULL) {
+        printf("Ошибка выделения памяти!\n");
+        exit(1);
+    }
     
     double x = x0;
     double y = y0;
@@ -177,7 +196,6 @@ SolutionPoint* solve_ode(ButcherTable *table, double x0, double y0,
         solution[i].x = x;
         solution[i].y_num = y;
         solution[i].y_exact = exact_solution(x);
-        solution[i].error = fabs(solution[i].y_num - solution[i].y_exact);
         
         if (i < n - 1) {
             y = rk_step(x, y, h, table);
@@ -266,47 +284,31 @@ void initialize_butcher_tables(ButcherTable *tables) {
 
 void save_plot_data(SolutionPoint *solutions[], int num_methods, int n_points, ButcherTable **tables) {
     FILE *file_solutions = fopen("solutions.dat", "w");
-    FILE *file_errors = fopen("errors.dat", "w");
     
-    if (!file_solutions || !file_errors) {
-        printf("Ошибка создания файлов для графиков!\n");
+    if (!file_solutions) {
+        printf("Ошибка создания файла solutions.dat!\n");
         return;
     }
     
     // Заголовки для файла решений
-    fprintf(file_solutions, "# x Точное ");
+    fprintf(file_solutions, "# x exact");
     for (int i = 0; i < num_methods; i++) {
-        fprintf(file_solutions, "%s ", tables[i]->name);
+        fprintf(file_solutions, " %s", tables[i]->name);
     }
     fprintf(file_solutions, "\n");
     
-    // Заголовки для файла ошибок
-    fprintf(file_errors, "# x ");
-    for (int i = 0; i < num_methods; i++) {
-        fprintf(file_errors, "Ошибка_%s ", tables[i]->name);
-    }
-    fprintf(file_errors, "\n");
-    
     // Данные для графиков
     for (int j = 0; j < n_points; j++) {
-        // Решения
-        fprintf(file_solutions, "%.6f %.6f ", solutions[0][j].x, solutions[0][j].y_exact);
+        fprintf(file_solutions, "%.6f %.6f", solutions[0][j].x, solutions[0][j].y_exact);
         for (int i = 0; i < num_methods; i++) {
-            fprintf(file_solutions, "%.6f ", solutions[i][j].y_num);
+            fprintf(file_solutions, " %.6f", solutions[i][j].y_num);
         }
         fprintf(file_solutions, "\n");
-        
-        // Ошибки
-        fprintf(file_errors, "%.6f ", solutions[0][j].x);
-        for (int i = 0; i < num_methods; i++) {
-            fprintf(file_errors, "%.6f ", solutions[i][j].error);
-        }
-        fprintf(file_errors, "\n");
     }
     
     fclose(file_solutions);
-    fclose(file_errors);
-    printf("Данные для графиков сохранены в файлы solutions.dat и errors.dat\n");
+    printf("Данные сохранены в solutions.dat: %d точек от x=%.2f до x=%.2f\n", 
+           n_points, solutions[0][0].x, solutions[0][n_points-1].x);
 }
 
 void create_gnuplot_script(int num_methods, ButcherTable **tables) {
@@ -316,156 +318,135 @@ void create_gnuplot_script(int num_methods, ButcherTable **tables) {
         return;
     }
     
-    fprintf(script, "set terminal pngcairo size 1200,800 enhanced font 'Arial,10'\n");
-    fprintf(script, "set multiplot layout 2,1 title 'Решение ОДУ: y'' = y^2 - y*sin(x) + cos(x)' font 'Arial,12'\n\n");
-    
-    // Первый график: решения
-    fprintf(script, "set title 'Численные решения и точное решение'\n");
-    fprintf(script, "set xlabel 'x'\n");
-    fprintf(script, "set ylabel 'y(x)'\n");
+    fprintf(script, "set terminal pngcairo size 1200,800 enhanced font 'Verdana,12'\n");
+    fprintf(script, "set output 'ode_solution.png'\n");
+    fprintf(script, "set title 'Решение ОДУ: y'' = y^2 - y*sin(x) + cos(x)' font 'Verdana,14'\n");
+    fprintf(script, "set xlabel 'x' font 'Verdana,12'\n");
+    fprintf(script, "set ylabel 'y(x)' font 'Verdana,12'\n");
+    fprintf(script, "set xrange [0:4]\n");
+    fprintf(script, "set yrange [-1.2:1.2]\n");
     fprintf(script, "set grid\n");
-    fprintf(script, "set key outside right top\n");
-    fprintf(script, "plot 'solutions.dat' using 1:2 with lines linewidth 2 title 'Точное решение (sin(x))'");
+    fprintf(script, "set key outside right top vertical box\n");
+    fprintf(script, "set key spacing 1.5\n\n");
     
-    // Цвета для разных методов
+    // Точное решение
+    fprintf(script, "plot 'solutions.dat' using 1:2 with lines linewidth 3 linecolor rgb 'black' title 'Точное решение (sin(x))'");
+    
+    // Численные методы
     char *colors[] = {"red", "blue", "green", "purple", "orange", "brown"};
-    char *point_types[] = {"points", "points", "points", "points", "points", "points"};
+    char *styles[] = {"points pointtype 7 pointsize 1.2", 
+                     "points pointtype 9 pointsize 1.2",
+                     "points pointtype 11 pointsize 1.2",
+                     "points pointtype 13 pointsize 1.2", 
+                     "points pointtype 15 pointsize 1.2",
+                     "points pointtype 17 pointsize 1.2"};
     
     for (int i = 0; i < num_methods; i++) {
-        fprintf(script, ", '' using 1:%d with %s pointtype %d linecolor rgb '%s' title '%s'", 
-                i+3, point_types[i], i+1, colors[i], tables[i]->name);
+        fprintf(script, ", \\\n     '' using 1:%d with %s linecolor rgb '%s' title '%s'", 
+                i+3, styles[i], colors[i], tables[i]->name);
     }
-    fprintf(script, "\n\n");
-    
-    // Второй график: ошибки
-    fprintf(script, "set title 'Погрешности численных методов'\n");
-    fprintf(script, "set xlabel 'x'\n");
-    fprintf(script, "set ylabel 'Погрешность |y_{числ} - y_{точн}|'\n");
-    fprintf(script, "set grid\n");
-    fprintf(script, "set logscale y\n");
-    fprintf(script, "set key outside right top\n");
-    fprintf(script, "plot 'errors.dat' using 1:2 with lines linewidth 2 title 'Ошибка %s'", tables[0]->name);
-    
-    for (int i = 1; i < num_methods; i++) {
-        fprintf(script, ", '' using 1:%d with lines linewidth 2 linecolor rgb '%s' title 'Ошибка %s'", 
-                i+2, colors[i], tables[i]->name);
-    }
-    fprintf(script, "\n\n");
-    
-    fprintf(script, "unset multiplot\n");
-    fprintf(script, "set output 'results_comparison.png'\n");
-    fprintf(script, "replot\n");
+    fprintf(script, "\n");
     
     fclose(script);
     printf("Скрипт GNUplot создан: plot_results.gnu\n");
 }
 
 void generate_plots() {
-    printf("\nГенерация графиков...\n");
-    system("gnuplot plot_results.gnu");
-    printf("Графики сохранены в файл: results_comparison.png\n");
-    printf("Для просмотра графиков выполните: eog results_comparison.png\n");
+    printf("\nЗапуск GNUplot для создания графика...\n");
+    int result = system("gnuplot plot_results.gnu");
+    if (result == 0) {
+        printf("График успешно создан: ode_solution.png\n");
+        
+        // Попробуем открыть график разными способами
+        printf("Попытка открыть график...\n");
+        int opened = system("xdg-open ode_solution.png 2>/dev/null");
+        if (opened != 0) {
+            opened = system("eog ode_solution.png 2>/dev/null");
+        }
+        if (opened != 0) {
+            opened = system("display ode_solution.png 2>/dev/null");
+        }
+        if (opened != 0) {
+            printf("График сохранен как 'ode_solution.png'. Откройте его вручную.\n");
+        }
+    } else {
+        printf("Ошибка при создании графика!\n");
+        printf("Проверьте установлен ли GNUplot: sudo apt install gnuplot\n");
+    }
 }
 
 void print_solution(SolutionPoint *solution, int n, ButcherTable *table, double h) {
-    printf("\n%s с шагом h = %.3f\n", table->name, h);
-    printf("============================================\n");
-    printf("   x    Численное   Точное   Погрешность\n");
-    printf("--------------------------------------------\n");
+    printf("\n%s (шаг h = %.3f)\n", table->name, h);
+    printf(" x     Численное   Точное\n");
+    printf("--------------------------\n");
     
-    double max_error = 0;
-    for (int i = 0; i < n; i++) {
-        printf("%6.3f   %8.6f  %8.6f  %8.6f\n", 
-               solution[i].x, solution[i].y_num, 
-               solution[i].y_exact, solution[i].error);
-        
-        if (solution[i].error > max_error) {
-            max_error = solution[i].error;
-        }
+    // Показываем только каждую 4-ю точку для компактности
+    for (int i = 0; i < n; i += 4) {
+        printf("%.3f  %8.6f  %8.6f\n", 
+               solution[i].x, solution[i].y_num, solution[i].y_exact);
     }
-    printf("--------------------------------------------\n");
-    printf("Максимальная погрешность: %.6f\n", max_error);
-}
-
-void convergence_analysis(ButcherTable *table, double x0, double y0, double x_end) {
-    printf("\nАнализ сходимости %s:\n", table->name);
-    printf("h    \tМаксимальная погрешность     Во сколько уменьшилась \n");
-    printf("-----------------------------------------------------------\n");
-    
-    double prev_error = 0;
-    double h_values[] = {0.1, 0.05, 0.025, 0.0125};
-    
-    for (int i = 0; i < 4; i++) {
-        double h = h_values[i];
-        int n;
-        SolutionPoint *sol = solve_ode(table, x0, y0, x_end, h, &n);
-        
-        double max_error = 0;
-        for (int j = 0; j < n; j++) {
-            if (sol[j].error > max_error) {
-                max_error = sol[j].error;
-            }
-        }
-        
-        double ratio = (i > 0) ? prev_error / max_error : 0;
-        printf("%.4f        %.10f\t\t   ", h, max_error);
-        if (i > 0) printf("%.2f", ratio);
-        printf("\n");
-        
-        prev_error = max_error;
-        free(sol);
+    if (n > 1 && (n-1) % 4 != 0) {
+        printf("%.3f  %8.6f  %8.6f\n", 
+               solution[n-1].x, solution[n-1].y_num, solution[n-1].y_exact);
     }
+    printf("--------------------------\n");
 }
 
 int main() {
     double x0 = 0.0;      
     double y0 = 0.0;      
     double x_end = 4.0;   
-    double h = 0.25;     
+    double h = 0.1;
     
     printf("============================================\n");
-    printf("y' = y^2 - y*sin(x) + cos(x)\n");
-    printf("y(0) = 0\n");
-    printf("y(x) = sin(x)\n");
-    printf("Интервал: [0, 4], Шаг: h = %.2f\n", h);
+    printf("Решение ОДУ: y' = y^2 - y*sin(x) + cos(x)\n");
+    printf("Начальные условия: y(0) = 0\n");
+    printf("Точное решение: y(x) = sin(x)\n");
+    printf("Интервал: [%.1f, %.1f], Шаг: h = %.2f\n", x0, x_end, h);
     printf("============================================\n");
     
     ButcherTable tables[6];
     initialize_butcher_tables(tables);
     int num_methods = 6;
     
-    // Создаем массив указателей для передачи в функции
+    // Создаем массив указателей
     ButcherTable *table_ptrs[6];
     for (int i = 0; i < num_methods; i++) {
         table_ptrs[i] = &tables[i];
     }
     
-    // Сохраняем все решения для графиков
+    // Вычисляем решения
     SolutionPoint *solutions[6];
     int n_points;
     
-    printf("\nВычисление решений...\n");
+    printf("\nВычисление решений методами Рунге-Кутты...\n");
     for (int i = 0; i < num_methods; i++) {
         solutions[i] = solve_ode(&tables[i], x0, y0, x_end, h, &n_points);
         print_solution(solutions[i], n_points, &tables[i], h);
     }
     
+    // Проверяем данные
+    printf("\nПроверка данных:\n");
+    for (int i = 0; i < num_methods; i++) {
+        printf("%s: x ∈ [%.3f, %.3f], точек: %d\n", 
+               tables[i].name, solutions[i][0].x, solutions[i][n_points-1].x, n_points);
+    }
+    
     // Создаем графики
+    printf("\nСоздание графиков...\n");
     save_plot_data(solutions, num_methods, n_points, table_ptrs);
     create_gnuplot_script(num_methods, table_ptrs);
     generate_plots();
     
-    // Анализ сходимости
-    printf("\n\nАнализ сходимости:\n");
-    printf("============================================\n");
-    convergence_analysis(&tables[0], x0, y0, x_end);
-    convergence_analysis(&tables[2], x0, y0, x_end);
-    convergence_analysis(&tables[4], x0, y0, x_end);
+    // Проверяем существование файлов
+    printf("\nПроверка созданных файлов:\n");
+    system("ls -la solutions.dat plot_results.gnu ode_solution.png 2>/dev/null");
     
     // Освобождаем память
     for (int i = 0; i < num_methods; i++) {
         free(solutions[i]);
     }
     
+    printf("\nПрограмма завершена.\n");
     return 0;
 }
